@@ -1208,12 +1208,15 @@ class TikTokUserScraperSync:
         """Convert TikTok profile data to contact table format"""
         display_name = profile.get('display_name', '').strip()
         bio = profile.get('bio', '').strip()
+        search_query = profile.get('search_query', '').strip()
 
         description_parts = []
         if display_name:
             description_parts.append(f"Name: {display_name}")
         if bio:
             description_parts.append(bio)
+        if search_query:
+            description_parts.append(f"query: {search_query}")
         description = '\n'.join(description_parts) if description_parts else None
 
         tags = ['tiktok']
@@ -1384,6 +1387,9 @@ class TikTokUserScraperSync:
 
                             # Format the profile data
                             profile = self.format_profile_data(user_info)
+
+                            # Add search query that was used to find this profile
+                            profile['search_query'] = search_term
 
                             # Check email filter
                             if filter_emails_only and not profile.get('email'):

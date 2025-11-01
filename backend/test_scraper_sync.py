@@ -34,9 +34,9 @@ async def test_scraper_sync():
 
     # Step 2: Run the scraper with the fresh token
     profiles_count = await run_campaign_scraper_sync(
-        campaign_description="UGC creators and content creators who work with brands",
-        num_queries=5,  # 5 search queries
-        users_per_search=20,  # 20 users per query
+        campaign_description="ugc fashion creators",
+        num_queries=100,  # 5 search queries
+        users_per_search=10,  # 20 users per query
         filter_emails_only=True,
         ms_token=ms_token  # Pass the fresh MS token!
     )
