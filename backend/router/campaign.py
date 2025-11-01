@@ -25,7 +25,7 @@ from prompts import (
     get_delivered_content_acknowledgment,
     get_content_submission_error_message
 )
-from crawler import run_campaign_scraper
+from crawler import run_campaign_scraper_sync
 
 logger = logging.getLogger(__name__)
 
@@ -483,15 +483,21 @@ async def initiate_campaign(request: InitiateCampaignRequest):
 
     try:
         # Fetch brand metadata from database
-        logger.info(f"Starting crawler for campaign: {request.campaign_description}")
-        run_campaign_scraper(
-            campaign_description=request.campaign_description,
-            num_queries=10,
-            users_per_search=10,
-            filter_emails_only=True,
-            supabase_url=os.getenv('SUPABASE_URL'),
-            supabase_key=os.getenv('SUPABASE_KEY')
-        )
+#         logger.info(f"Starting crawler for campaign: {request.campaign_description}")
+
+        # profiles_scraped = await run_campaign_scraper_sync(
+        #     campaign_description=request.campaign_description,
+        #     num_queries=10,  # Generate 10 search queries
+        #     users_per_search=10,  # Get 10 users per query = ~100 total contacts
+        #     filter_emails_only=True,  # Only get profiles with emails
+        #     supabase_url=os.getenv('SUPABASE_URL'),
+        #     supabase_key=os.getenv('SUPABASE_KEY')
+        # )
+
+        # logger.info(f"Crawler completed: {profiles_scraped} profiles scraped and saved to database")
+
+        # Step 2: Fetch the newly scraped contacts from database
+        contacts_list = get_contacts_list(10)
 
         try:
             brand_response = supabase_client.table("brand") \
