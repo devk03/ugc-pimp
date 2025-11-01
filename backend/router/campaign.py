@@ -15,7 +15,7 @@ from prompts import (
     NEGOTIATION_SYSTEM_PROMPT,
     get_negotiation_context_prompt
 )
-from crawler import run_campaign_scraper
+from crawler import run_campaign_scraper_sync
 
 logger = logging.getLogger(__name__)
 
@@ -243,19 +243,19 @@ async def initiate_campaign(request: InitiateCampaignRequest):
         # Step 1: Run the TikTok crawler to find relevant creators
         logger.info(f"Starting crawler for campaign: {request.campaign_description}")
 
-        profiles_scraped = await run_campaign_scraper(
-            campaign_description=request.campaign_description,
-            num_queries=10,  # Generate 10 search queries
-            users_per_search=10,  # Get 10 users per query = ~100 total contacts
-            filter_emails_only=True,  # Only get profiles with emails
-            supabase_url=os.getenv('SUPABASE_URL'),
-            supabase_key=os.getenv('SUPABASE_KEY')
-        )
+        # profiles_scraped = await run_campaign_scraper_sync(
+        #     campaign_description=request.campaign_description,
+        #     num_queries=10,  # Generate 10 search queries
+        #     users_per_search=10,  # Get 10 users per query = ~100 total contacts
+        #     filter_emails_only=True,  # Only get profiles with emails
+        #     supabase_url=os.getenv('SUPABASE_URL'),
+        #     supabase_key=os.getenv('SUPABASE_KEY')
+        # )
 
-        logger.info(f"Crawler completed: {profiles_scraped} profiles scraped and saved to database")
+        # logger.info(f"Crawler completed: {profiles_scraped} profiles scraped and saved to database")
 
         # Step 2: Fetch the newly scraped contacts from database
-        contacts_list = get_contacts_list(limit=profiles_scraped if profiles_scraped > 0 else 10)
+        contacts_list = get_contacts_list(10)
 
         if len(contacts_list) == 0:
             logger.error("No contacts found after scraping. Cannot send emails.")

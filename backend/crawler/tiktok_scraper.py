@@ -83,25 +83,26 @@ async def generate_search_queries(
         print("⚠️  OPENAI_API_KEY not found in environment variables")
         print("   Falling back to default search terms...")
         return [
-            "ugc creator",
-            "fitness"
-            "dance"
-            "music"
-            "art"
-            "fashion"
-            "beauty"
-            "vlogger"
-            "food"
-            "travel"
-            "technology"
-            "gaming"
-            "sports"
-            "hobbies"
-            "interests"
-            "lifestyle"
-            "pets"
-            "animals"
-            "nature"
+            "ugc",
+            "fitness",
+            "foodie",
+            "makeup",
+            "gamer",
+            "vegan",
+            "travel",
+            "fashion",
+            "beauty",
+            "dance",
+            "cooking",
+            "tech",
+            "pets",
+            "diy",
+            "art",
+            "music",
+            "lifestyle",
+            "mom",
+            "blogger",
+            "creator"
         ]
     
     try:
@@ -109,19 +110,27 @@ async def generate_search_queries(
         
         prompt = f"""Generate {num_queries} diverse TikTok search queries to find {focus_area}.
 
+IMPORTANT: TikTok search matches USERNAMES/HANDLES. Generate keywords that creators would use IN THEIR HANDLES.
+
 Requirements:
-- Each query should be 1-5 words, optimized for TikTok search
-- Make them varied, creative, and use different angles/terminology
-- Include hashtag-style terms, professional terms, and casual terms
-- Focus on terms that creators might use in their bios or content
+- Each query should be 1-2 WORDS MAX (prefer single words)
+- Think like TikTok handle keywords: "fitness", "foodie", "makeup", "vegan", "gamer", "travelblogger"
+- Use terms commonly found in creator usernames (not full sentences)
+- Include niche-specific keywords, slang, and abbreviations
+- Avoid phrases - focus on handle-style keywords
 - Return a JSON object with a "queries" key containing an array of strings
 
-Example JSON format:
+Example good queries for "fitness creators":
 {{
-  "queries": ["ugc creator", "brand collaboration", "content creator for hire", "sponsored content creator"]
+  "queries": ["fitness", "gym", "workout", "fitfam", "gains", "bodybuilding", "yoga", "pilates", "crossfit", "running"]
 }}
 
-Generate {num_queries} unique search queries:"""
+Example BAD queries (too long/descriptive):
+- "fitness content creator" ❌
+- "people who post workout videos" ❌
+- "gym motivation influencer" ❌
+
+Generate {num_queries} SHORT, HANDLE-LIKE keywords:"""
 
         response = await client.chat.completions.create(
             model="gpt-4o-mini",  # Using gpt-4o-mini for cost efficiency
