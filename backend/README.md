@@ -10,9 +10,7 @@ This is the UV project for the backend. It is responsible for the project manage
 source .venv/bin/activate
 ```
 
-### Dependencies
-
-The dependencies are managed by the `pyproject.toml` file. To install them run:
+The dependencies are managed by the `pyproject.toml` file. To install them for the first time run:
 
 ```bash
 uv sync
