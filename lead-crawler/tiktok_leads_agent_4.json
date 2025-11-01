@@ -1,0 +1,101 @@
+{
+  "agent_id": 4,
+  "target_count": 10,
+  "started_at": "2025-11-01T03:18:33.818026",
+  "completed_at": "2025-11-01T03:21:30.158370",
+  "elapsed_seconds": 176.340344,
+  "status": "completed",
+  "leads_found": 10,
+  "leads": [
+    {
+      "username": "jiji.wonder",
+      "display_name": "Jiji<3",
+      "email": "jiji@tiddle.io",
+      "bio": "Be kind always ❤️\nBusiness inquiries : jiji@tiddle.io",
+      "follower_count": "3.6M",
+      "profile_url": "[3772]",
+      "is_verified": false
+    },
+    {
+      "username": "hito.bito",
+      "display_name": "Megan and Ben",
+      "email": "hitobito@geexplus.co.jp",
+      "bio": "人々🧍‍♂️\nBusiness inquiries:\nhitobito@geexplus.co.jp",
+      "follower_count": "1.1M",
+      "profile_url": "[3773]",
+      "is_verified": false
+    },
+    {
+      "username": "shamelesselle",
+      "display_name": "Shameless Elle 🇨🇦",
+      "email": "shamelesselle@gmail.com",
+      "bio": "Business Inquiries: shamelesselle@gmail.com",
+      "follower_count": "1M",
+      "profile_url": "[3774]",
+      "is_verified": false
+    },
+    {
+      "username": "hoganmolthan",
+      "display_name": "Hogan Molthan",
+      "email": "Hogan@28thAve.com",
+      "bio": "Dallas, Texas\nSnapchat: hogan_molthan\nBusiness Inquiries: Hogan@28thAve.com",
+      "follower_count": "739.3K",
+      "profile_url": "[3775]",
+      "is_verified": false
+    },
+    {
+      "username": "hamibees",
+      "display_name": "Hamibees",
+      "email": "hami@franklyagency.de",
+      "bio": "You're safe here🤍\nBusiness inquiries: hami@franklyagency.de\nInstagram: hami.hsn",
+      "follower_count": "958.4K",
+      "profile_url": "[3778]",
+      "is_verified": false
+    },
+    {
+      "username": "milessdespair",
+      "display_name": "milessdespair",
+      "email": "miles@theheavyhouse.com",
+      "bio": "For any business inquiries email: miles@theheavyhouse.com",
+      "follower_count": "1.4M",
+      "profile_url": "[3780]",
+      "is_verified": false
+    },
+    {
+      "username": "@louiejaybaloc",
+      "display_name": "Daddy Louie",
+      "email": "daddylouie06@gmail.com",
+      "bio": "🇵🇭🏆 #1 TikTokShop Superstar Creator Collab? email @daddylouie06@gmail.com",
+      "follower_count": "12.2M",
+      "profile_url": "/@louiejaybaloc",
+      "is_verified": false
+    },
+    {
+      "username": "@michellericardo_",
+      "display_name": "michellericardo_",
+      "email": "Micheller.collab@gmail.com",
+      "bio": "VEN A MI INSTA 🍒😏 📩 Collabs: Micheller.collab@gmail.com",
+      "follower_count": "317.2K",
+      "profile_url": "/@michellericardo_",
+      "is_verified": false
+    },
+    {
+      "username": "@the.yolohouse",
+      "display_name": "YOLO HOUSE",
+      "email": "collaboration@theyolohouse.com",
+      "bio": "For business: collaboration@theyolohouse.com Kazakhstan 🇰🇿",
+      "follower_count": "26.8M",
+      "profile_url": "/@the.yolohouse",
+      "is_verified": false
+    },
+    {
+      "username": "@mitchocochip",
+      "display_name": "IG mitchocochip ° STRONGGIRLTM",
+      "email": "inquiries.michellek@gmail.com",
+      "bio": "Achi/Dancer 🖼️ @mitchocochip on IG Collab: inquiries.michellek@gmail.com",
+      "follower_count": "175.4K",
+      "profile_url": "/@mitchocochip",
+      "is_verified": false
+    }
+  ]
+}

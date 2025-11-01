@@ -1,0 +1,36 @@
+# Environment variables
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+*.log
+tiktok_accounts.txt
+tiktok_creators_*.json
+tiktok_creators.json
+tiktok_creators_with_emails.json
+
+# Generated scripts from CodeAgent
+tiktok_scraper_generated.py
+tiktok_scraper_generated.ipynb

@@ -1,0 +1,101 @@
+{
+  "agent_id": 1,
+  "target_count": 10,
+  "started_at": "2025-11-01T03:18:33.755551",
+  "completed_at": "2025-11-01T03:20:46.563552",
+  "elapsed_seconds": 132.808001,
+  "status": "completed",
+  "leads_found": 10,
+  "leads": [
+    {
+      "username": "@jiji.wonder",
+      "display_name": "Jiji<3",
+      "email": "jiji@tiddle.io",
+      "bio": "Be kind always ❤️\nBusiness inquiries : jiji@tiddle.io",
+      "follower_count": "3.6M",
+      "profile_url": "/@jiji.wonder",
+      "is_verified": false
+    },
+    {
+      "username": "@hito.bito",
+      "display_name": "Megan and Ben",
+      "email": "hitobito@geexplus.co.jp",
+      "bio": "人々🧍‍♂️\nBusiness inquiries:\nhitobito@geexplus.co.jp",
+      "follower_count": "1.1M",
+      "profile_url": "/@hito.bito",
+      "is_verified": false
+    },
+    {
+      "username": "@shamelesselle",
+      "display_name": "Shameless Elle 🇨🇦",
+      "email": "shamelesselle@gmail.com",
+      "bio": "Business Inquiries: shamelesselle@gmail.com",
+      "follower_count": "1M",
+      "profile_url": "/@shamelesselle",
+      "is_verified": false
+    },
+    {
+      "username": "@hoganmolthan",
+      "display_name": "Hogan Molthan",
+      "email": "Hogan@28thAve.com",
+      "bio": "Dallas, Texas\nSnapchat: hogan_molthan\nBusiness Inquiries: Hogan@28thAve.com",
+      "follower_count": "739.3K",
+      "profile_url": "/@hoganmolthan",
+      "is_verified": false
+    },
+    {
+      "username": "@hamibees",
+      "display_name": "Hamibees",
+      "email": "hami@franklyagency.de",
+      "bio": "You're safe here🤍\nBusiness inquiries: hami@franklyagency.de\nInstagram: hami.hsn",
+      "follower_count": "958.4K",
+      "profile_url": "/@hamibees",
+      "is_verified": false
+    },
+    {
+      "username": "@milessdespair",
+      "display_name": "milessdespair",
+      "email": "miles@theheavyhouse.com",
+      "bio": "For any business inquiries email: miles@theheavyhouse.com",
+      "follower_count": "1.4M",
+      "profile_url": "/@milessdespair",
+      "is_verified": false
+    },
+    {
+      "username": "@edwardkso",
+      "display_name": "Edward So",
+      "email": "Edwardso@sparkmedia.la",
+      "bio": "🇰🇷🇺🇸\nBusiness Inquiries: Edwardso@sparkmedia.la\n💫K-Pop Smoke💫",
+      "follower_count": "1.2M",
+      "profile_url": "/@edwardkso",
+      "is_verified": false
+    },
+    {
+      "username": "@sharidyonne",
+      "display_name": "Shari",
+      "email": "shari@kensingtongrey.co",
+      "bio": "✨Food & Lifestyle✨\n27🇭🇹\nFor business inquiries⬇️\nshari@kensingtongrey.co",
+      "follower_count": "1.2M",
+      "profile_url": "/@sharidyonne",
+      "is_verified": false
+    },
+    {
+      "username": "@_yogi75",
+      "display_name": "Jet",
+      "email": "Jerrodwest@aloomamediagroup.com",
+      "bio": "This and @dailydevonte are my only pages\nBusiness inquiries: Jerrodwest@aloomamediagroup.com",
+      "follower_count": "1.5M",
+      "profile_url": "/@_yogi75",
+      "is_verified": false
+    },
+    {
+      "username": "@marrkadams",
+      "display_name": "Marrkadams",
+      "email": "mark.adams@collab.inc",
+      "bio": "Business only: mark.adams@collab.inc",
+      "follower_count": "23.4M",
+      "profile_url": "Unavailable",
+      "is_verified": false
+    }
+  ]
+}

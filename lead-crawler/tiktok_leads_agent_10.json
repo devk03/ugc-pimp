@@ -1,0 +1,9 @@
+{
+  "agent_id": 10,
+  "target_count": 10,
+  "started_at": "2025-11-01T03:18:33.917532",
+  "completed_at": "2025-11-01T03:27:49.261710",
+  "status": "completed",
+  "leads_found": 0,
+  "leads": []
+}

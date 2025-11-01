@@ -1,0 +1,46 @@
+import asyncio
+import os
+import sys
+
+from agentmail import AsyncAgentMail  # type: ignore
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from dotenv import load_dotenv
+
+load_dotenv()
+
+from browser_use import Agent, Browser, ChatBrowserUse
+from email_tools import EmailTools
+
+TASK = """
+Go to tiktok.com, create a new account (use the get_email_address), make up password and all other information, confirm the 2fa with get_latest_email.
+"""
+
+
+async def main():
+	# Create email inbox
+	# Get an API key from https://agentmail.to/
+	api_key = os.getenv('AGENTMAIL_API_KEY')
+	if not api_key:
+		raise ValueError("AGENTMAIL_API_KEY not found in environment. Please add it to your .env file")
+
+	email_client = AsyncAgentMail(api_key=api_key)
+	inbox = await email_client.inboxes.create()
+	print(f'Your email address is: {inbox.inbox_id}\n\n')
+
+	# Initialize the tools for browser-use agent
+	tools = EmailTools(email_client=email_client, inbox=inbox)
+
+	# Initialize the LLM for browser-use agent
+	llm = ChatBrowserUse()
+
+	# Create browser (let it use default Chrome)
+	browser = Browser(headless=False)
+
+	agent = Agent(task=TASK, tools=tools, llm=llm, browser=browser)
+
+	await agent.run()
+
+
+if __name__ == '__main__':
+	asyncio.run(main())

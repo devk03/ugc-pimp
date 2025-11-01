@@ -1,0 +1,101 @@
+{
+  "agent_id": 5,
+  "target_count": 10,
+  "started_at": "2025-11-01T03:18:33.833469",
+  "completed_at": "2025-11-01T03:22:03.348287",
+  "elapsed_seconds": 209.514818,
+  "status": "completed",
+  "leads_found": 10,
+  "leads": [
+    {
+      "username": "@businessinsiderssa",
+      "display_name": "Business Insider SSA",
+      "email": "businessinsider@pulse.ng",
+      "bio": "Business Insider SSA - Official Account 📩 businessinsider@pulse.ng | Link in bio for the latest news ⬇️",
+      "follower_count": "1.3M",
+      "profile_url": "/@businessinsiderssa",
+      "is_verified": false
+    },
+    {
+      "username": "@breanaclough",
+      "display_name": "Breana Clough",
+      "email": "breana@friendsinreality.com",
+      "bio": "📍LA 📧business inquiries- breana@friendsinreality.com",
+      "follower_count": "1.2M",
+      "profile_url": "/@breanaclough",
+      "is_verified": false
+    },
+    {
+      "username": "@business.tips283",
+      "display_name": "BUSINESS TIPS",
+      "email": "mk3723782@gmail.com",
+      "bio": "Get Your Business Tips Here ⬇️ mk3723782@gmail.com",
+      "follower_count": "20.1K",
+      "profile_url": "/@business.tips283",
+      "is_verified": false
+    },
+    {
+      "username": "@amna__business",
+      "display_name": "AMNA💜🌸🫧",
+      "email": "Amna.sn22@gmail.com",
+      "bio": "Vente Jersey en gros et détails💜🌸 Mrs D💍❤️ +221 77 991 44 44 Amna.sn22@gmail.com",
+      "follower_count": "751.8K",
+      "profile_url": "/@amna__business",
+      "is_verified": false
+    },
+    {
+      "username": "@busseunlu",
+      "display_name": "Busse Unlu",
+      "email": "hello@morethansocial.com.tr",
+      "bio": "📍Istanbul 🇹🇷 📧 hello@morethansocial.com.tr",
+      "follower_count": "3.3M",
+      "profile_url": "/@busseunlu",
+      "is_verified": false
+    },
+    {
+      "username": "@your_finance_brother",
+      "display_name": "your_finance_brother",
+      "email": "finance.brother.contact@gmail.com",
+      "bio": "Contact: finance.brother.contact@gmail.com",
+      "follower_count": "169.7K",
+      "profile_url": "/@your_finance_brother",
+      "is_verified": false
+    },
+    {
+      "username": "@autumnbagel",
+      "display_name": "Autumn Bagel",
+      "email": "autumnbagel8@gmail.com",
+      "bio": "Autumn Bagel 📧 autumnbagel8@gmail.com",
+      "follower_count": "1.1M",
+      "profile_url": "/@autumnbagel",
+      "is_verified": false
+    },
+    {
+      "username": "@h00pify",
+      "display_name": "H00PIFY",
+      "email": "henrydetolla@h00pify.com",
+      "bio": "Henry De Tolla ✉️: henrydetolla@h00pify.com BUY MERCH ⬇️",
+      "follower_count": "911.1K",
+      "profile_url": "/@h00pify",
+      "is_verified": false
+    },
+    {
+      "username": "@louiejaybaloc",
+      "display_name": "Daddy Louie",
+      "email": "daddylouie06@gmail.com",
+      "bio": "🇵🇭🏆 #1 TikTokShop Superstar Creator Collab? email @daddylouie06@gmail.com",
+      "follower_count": "12.2M",
+      "profile_url": "/@louiejaybaloc",
+      "is_verified": false
+    },
+    {
+      "username": "@michellericardo_",
+      "display_name": "michellericardo_",
+      "email": "Micheller.collab@gmail.com",
+      "bio": "VEN A MI INSTA 🍒😏 📩 Collabs: Micheller.collab@gmail.com",
+      "follower_count": "317.2K",
+      "profile_url": "/@michellericardo_",
+      "is_verified": false
+    }
+  ]
+}
