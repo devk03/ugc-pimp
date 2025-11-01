@@ -69,13 +69,12 @@ export default function Home() {
           </section>
 
           {/* CTA Section */}
-          <section className="relative px-4 py-16 rounded-3xl overflow-hidden border bg-gradient-to-r from-purple-600/10 via-pink-600/10 to-orange-600/10 dark:from-purple-600/20 dark:via-pink-600/20 dark:to-orange-600/20">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(168,85,247,0.1),transparent)]" />
+          <section className="relative px-4 py-16 rounded-3xl overflow-hidden bg-white dark:bg-black border-2 border-white/20 dark:border-white/10 shadow-[0_0_20px_rgba(168,85,247,0.3),0_0_40px_rgba(236,72,153,0.2)] dark:shadow-[0_0_20px_rgba(168,85,247,0.5),0_0_40px_rgba(236,72,153,0.4)]">
             <div className="relative z-10 text-center max-w-2xl mx-auto">
-              <h2 className="text-3xl md:text-4xl font-bold mb-4 bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+              <h2 className="text-3xl md:text-4xl font-bold mb-4 text-black dark:text-white">
                 Ready to Pimp Your UGC?
               </h2>
-              <p className="text-lg text-muted-foreground mb-8">
+              <p className="text-lg text-gray-600 dark:text-gray-400 mb-8">
                 Join brands that are transforming their marketing with authentic user-generated content.
               </p>
               {hasEnvVars && (
@@ -83,7 +82,7 @@ export default function Home() {
                   <Button asChild size="lg" className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white">
                     <Link href="/auth/sign-up">Get Started Free</Link>
                   </Button>
-                  <Button asChild size="lg" variant="outline">
+                  <Button asChild size="lg" variant="outline" className="border-2 border-gray-300 dark:border-gray-700 text-black dark:text-white hover:bg-gray-100 dark:hover:bg-gray-900">
                     <Link href="/auth/login">Sign In</Link>
                   </Button>
                 </div>

@@ -50,6 +50,8 @@ export default async function CampaignDetailPage({
       `
       id,
       description,
+      status,
+      agreed_price,
       created_at,
       updated_at,
       contact:contact_id (
@@ -60,6 +62,7 @@ export default async function CampaignDetailPage({
         tags,
         description,
         metadata,
+        email,
         created_at,
         updated_at
       )
@@ -79,6 +82,8 @@ export default async function CampaignDetailPage({
       contact_id: assignment.contact.id,
       campaign_id: campaignId,
       description: assignment.description,
+      status: assignment.status,
+      agreed_price: assignment.agreed_price,
       created_at: assignment.created_at,
       updated_at: assignment.updated_at,
       metadata: null,
