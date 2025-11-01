@@ -509,7 +509,12 @@ export function CampaignForm({ brandId, campaign }: CampaignFormProps) {
         </CardHeader>
         <CardContent>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault(); // Prevent default form submission
+              }} 
+              className="space-y-8"
+            >
               {/* Step Indicator */}
               <StepIndicator />
 
