@@ -141,40 +141,51 @@ def get_contacts_list() -> list[dict]:
 
 def get_target_price(contact_id: str) -> float:
     """
-    Calculate target price based on contact's expected views from recent post history.
-    TODO: Implement actual logic to fetch contact's post history and calculate price based on:
-    - Average views per post
-    - Engagement rate
-    - Follower count
-    - Platform (Instagram, TikTok, YouTube, etc.)
+    Calculate target price based on:
+    - 50% from average likes per video
+    - 50% from engagement ratio (likes_to_followers_ratio)
 
-    For now, returns a placeholder price between $50-$500.
+    Range: $50-$500
     """
     logger.info(f"Calculating target price for contact: {contact_id}")
 
     try:
-        # TODO: Fetch actual contact data and post history from Supabase
-        # response = supabase_client.table("contact").select("*").eq("id", contact_id).execute()
-        # contact_data = response.data[0]
-        #
-        # # Fetch recent posts and calculate average views
-        # posts_response = supabase_client.table("post_history").select("views").eq("contact_id", contact_id).limit(10).execute()
-        # avg_views = sum([post["views"] for post in posts_response.data]) / len(posts_response.data)
-        #
-        # # Price formula: $0.10 per 1000 views (CPM model)
-        # target_price = (avg_views / 1000) * 0.10
+        # Fetch contact metadata from Supabase
+        response = supabase_client.table("contact").select("metadata").eq("id", contact_id).single().execute()
 
-        # Placeholder: Return a random price based on contact_id hash
-        import hashlib
-        hash_val = int(hashlib.md5(contact_id.encode()).hexdigest(), 16)
-        target_price = 50 + (hash_val % 450)  # Range: $50-$500
+        if not response.data:
+            logger.warning(f"No contact data found for {contact_id}, using default price")
+            return 150.0
 
-        logger.info(f"Target price for contact {contact_id}: ${target_price:.2f}")
+        metadata = response.data.get("metadata", {})
+        tiktok_data = metadata.get("tiktok", {})
+
+        if not tiktok_data:
+            logger.warning(f"No TikTok metadata found for contact {contact_id}, using default price")
+            return 150.0
+
+        # Get metrics
+        avg_likes = tiktok_data.get("avg_likes_per_video", 0)
+        engagement_ratio = tiktok_data.get("likes_to_followers_ratio", 0)
+
+        # Component 1: Price based on average likes ($0.05 per like)
+        likes_price = avg_likes * 0.05
+
+        # Component 2: Price based on engagement ratio ($2 per ratio point)
+        ratio_price = engagement_ratio * 2.0
+
+        # Combine: 50% each component
+        target_price = (likes_price * 0.5) + (ratio_price * 0.5)
+
+        # Enforce minimum and maximum bounds
+        target_price = max(50.0, min(500.0, target_price))
+
+        logger.info(f"Target price for contact {contact_id}: ${target_price:.2f} "
+                   f"(avg likes: {avg_likes:.0f}, ratio: {engagement_ratio:.2f})")
         return float(target_price)
 
     except Exception as e:
         logger.error(f"Error calculating target price for contact {contact_id}: {str(e)}", exc_info=True)
-        # Default fallback price
         return 150.0
 
 def create_contact_campaign(campaign_id: str, contact_id: str) -> dict:
