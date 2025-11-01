@@ -993,10 +993,13 @@ async def handle_webhook(payload: WebhookPayload):
 
             if thread_messages:
                 for msg in thread_messages:
-                    inbox_id = msg.inbox_id if hasattr(msg, 'inbox_id') else msg.get('inbox_id')
+                    from_ = msg.from_ if hasattr(msg, 'from_') else msg.get('from')
                     text = msg.text if hasattr(msg, 'text') else msg.get('text')
 
-                    if inbox_id == NEGOTIATE_INBOX_ID:
+                    # Check if the message was sent by the brand (agent inbox)
+                    # Messages from the agent inbox are "assistant" (brand's perspective)
+                    # Messages from the creator are "user" (creator's perspective)
+                    if from_ and (from_ == NEGOTIATE_INBOX_ID or from_.lower() == NEGOTIATE_INBOX_ID.lower()):
                         role = "assistant"
                     else:
                         role = "user"
