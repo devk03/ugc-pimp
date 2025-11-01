@@ -1,1 +1,1 @@
-HOSTNAME="beatific-rosella-divinely.ngrok-free.dev"
+HOSTNAME="ugc-pimp-production.up.railway.app"
