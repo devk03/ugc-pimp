@@ -363,13 +363,83 @@ def extract_urls_from_text(text: str) -> list[str]:
 
 # verify_content_relevance function removed - manual verification now used instead
 
+def extract_creator_traits(contact_data: dict) -> tuple[Optional[str], Optional[str]]:
+    """
+    Extract creator name and special traits from contact data.
+    
+    Args:
+        contact_data: Dictionary containing contact information from database
+        
+    Returns:
+        Tuple of (creator_name, creator_traits)
+    """
+    # Extract name
+    firstname = contact_data.get("firstname", "").strip() if contact_data.get("firstname") else ""
+    lastname = contact_data.get("lastname", "").strip() if contact_data.get("lastname") else ""
+    creator_name = f"{firstname} {lastname}".strip() if firstname or lastname else None
+    
+    # Extract traits from various sources
+    traits_parts = []
+    
+    # Get AI description from metadata if available
+    metadata = contact_data.get("metadata", {})
+    if isinstance(metadata, dict):
+        tiktok_data = metadata.get("tiktok", {})
+        if isinstance(tiktok_data, dict):
+            ai_description = tiktok_data.get("ai_description")
+            if ai_description:
+                traits_parts.append(f"AI Profile Analysis: {ai_description}")
+            
+            # Add verification status
+            if tiktok_data.get("is_verified"):
+                traits_parts.append("Verified Creator")
+            
+            # Add follower count if notable
+            follower_count = tiktok_data.get("follower_count", 0)
+            if follower_count > 0:
+                if follower_count >= 1000000:
+                    traits_parts.append(f"Macro-influencer ({follower_count:,} followers)")
+                elif follower_count >= 100000:
+                    traits_parts.append(f"Mid-tier influencer ({follower_count:,} followers)")
+                elif follower_count >= 10000:
+                    traits_parts.append(f"Micro-influencer ({follower_count:,} followers)")
+                else:
+                    traits_parts.append(f"Nano-influencer ({follower_count:,} followers)")
+    
+    # Get tags
+    tags = contact_data.get("tags", [])
+    if tags and isinstance(tags, list):
+        tag_list = [tag for tag in tags if tag and tag != "tiktok"]
+        if tag_list:
+            traits_parts.append(f"Tags: {', '.join(tag_list)}")
+    
+    # Get description/bio
+    description = contact_data.get("description", "").strip()
+    if description:
+        # Use only the bio part if description contains "Name: ..."
+        if description.startswith("Name:"):
+            bio_parts = description.split("\n", 1)
+            if len(bio_parts) > 1:
+                bio = bio_parts[1].strip()
+                if bio:
+                    traits_parts.append(f"Bio: {bio}")
+        else:
+            traits_parts.append(f"Bio: {description}")
+    
+    creator_traits = " | ".join(traits_parts) if traits_parts else None
+    
+    return creator_name, creator_traits
+
 def generate_initial_message_body(
     product_name: str,
     product_url: str,
     campaign_description: str,
-    brand_metadata: dict
+    brand_metadata: dict,
+    creator_name: str = None,
+    creator_traits: str = None
 ) -> dict:
-    logger.info(f"Generating initial message for product: {product_name}")
+    logger.info(f"Generating initial message for product: {product_name}" + 
+                (f" for creator: {creator_name}" if creator_name else ""))
 
     openai_api_key = os.getenv("OPENAI_API_KEY")
     if not openai_api_key:
@@ -382,7 +452,9 @@ def generate_initial_message_body(
         brand_metadata=brand_metadata,
         product_name=product_name,
         product_url=product_url,
-        campaign_description=campaign_description
+        campaign_description=campaign_description,
+        creator_name=creator_name,
+        creator_traits=creator_traits
     )
 
     messages = [
@@ -508,8 +580,6 @@ async def initiate_campaign(request: InitiateCampaignRequest):
         # logger.info(f"Crawler completed: {profiles_scraped} profiles scraped and saved to database")
 
         # Step 2: Fetch the newly scraped contacts from database
-        contacts_list = get_contacts_list(10)
-
         try:
             brand_response = supabase_client.table("brand") \
                 .select("*") \
@@ -524,17 +594,43 @@ async def initiate_campaign(request: InitiateCampaignRequest):
 
         contacts_list = get_contacts_list()
 
-        email_content = generate_initial_message_body(
-            product_name=request.product_name,
-            product_url=request.product_url,
-            campaign_description=request.campaign_description,
-            brand_metadata=brand_metadata
-        )
-
         for contact in contacts_list:
             contact_id = contact["id"]
             contact_email = contact["email"]
-            logger.info(f"Sending email to {contact_email} for campaign {request.campaign_id}")
+            logger.info(f"Processing contact {contact_id} ({contact_email}) for campaign {request.campaign_id}")
+
+            # Fetch full contact data from database
+            try:
+                contact_response = supabase_client.table("contact") \
+                    .select("id, firstname, lastname, description, metadata, tags, email") \
+                    .eq("id", contact_id) \
+                    .single() \
+                    .execute()
+                
+                contact_data = contact_response.data if contact_response.data else {}
+                logger.info(f"Fetched contact data for {contact_id}")
+            except Exception as e:
+                logger.warning(f"Error fetching full contact data for {contact_id}: {str(e)}, using minimal data")
+                contact_data = {"id": contact_id, "email": contact_email}
+
+            # Extract creator name and traits
+            creator_name, creator_traits = extract_creator_traits(contact_data)
+            if creator_name:
+                logger.info(f"Creator name: {creator_name}")
+            if creator_traits:
+                logger.info(f"Creator traits: {creator_traits[:100]}..." if len(creator_traits) > 100 else f"Creator traits: {creator_traits}")
+
+            # Generate personalized email for this contact
+            email_content = generate_initial_message_body(
+                product_name=request.product_name,
+                product_url=request.product_url,
+                campaign_description=request.campaign_description,
+                brand_metadata=brand_metadata,
+                creator_name=creator_name,
+                creator_traits=creator_traits
+            )
+
+            logger.info(f"Sending personalized email to {contact_email} for campaign {request.campaign_id}")
 
             sent_message = agentmail_client.inboxes.messages.send(
                 inbox_id=NEGOTIATE_INBOX_ID,
