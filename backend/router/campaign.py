@@ -25,6 +25,7 @@ from prompts import (
     get_delivered_content_acknowledgment,
     get_content_submission_error_message
 )
+from crawler import run_campaign_scraper
 
 logger = logging.getLogger(__name__)
 
@@ -472,11 +473,26 @@ class VerifyContentResponse(BaseModel):
 
 @router.post("/initiate", response_model=InitiateCampaignResponse)
 async def initiate_campaign(request: InitiateCampaignRequest):
-    # TODO: get the actual relevant contacts for the campaign
+    """
+    Initiate a campaign by:
+    1. Scraping TikTok for relevant creators based on campaign description
+    2. Fetching the newly scraped contacts from database
+    3. Sending outreach emails to those contacts
+    """
     logger.info(f"Initiating campaign: {request.campaign_id} for brand: {request.brand_id}")
 
     try:
         # Fetch brand metadata from database
+        logger.info(f"Starting crawler for campaign: {request.campaign_description}")
+        run_campaign_scraper(
+            campaign_description=request.campaign_description,
+            num_queries=10,
+            users_per_search=10,
+            filter_emails_only=True,
+            supabase_url=os.getenv('SUPABASE_URL'),
+            supabase_key=os.getenv('SUPABASE_KEY')
+        )
+
         try:
             brand_response = supabase_client.table("brand") \
                 .select("*") \
@@ -502,6 +518,7 @@ async def initiate_campaign(request: InitiateCampaignRequest):
             contact_id = contact["id"]
             contact_email = contact["email"]
             logger.info(f"Sending email to {contact_email} for campaign {request.campaign_id}")
+
             sent_message = agentmail_client.inboxes.messages.send(
                 inbox_id=NEGOTIATE_INBOX_ID,
                 to=contact_email,
@@ -517,6 +534,9 @@ async def initiate_campaign(request: InitiateCampaignRequest):
 
         logger.info(f"Campaign {request.campaign_id} initiated successfully. Sent to {len(contacts_list)} contacts")
         return {"status": "campaign initiated"}
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error initiating campaign {request.campaign_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
