@@ -4,17 +4,19 @@ Uses the unofficial TikTok API to search for users and extract profile data
 
 Features:
 - Search for users by keywords
+- AI-generated search queries using OpenAI (optional)
 - Extract comprehensive profile information including engagement metrics
 - Find emails in user bios
 - Calculate avg_likes_per_video and engagement ratios from profile stats
 - Save results to JSON incrementally
+- Save to Supabase database (optional)
 - Much faster than browser automation
 
 Note: Individual video fetching doesn't work due to TikTok's bot detection.
       However, profile stats (heart_count, video_count) let us calculate useful engagement metrics!
 
 Setup:
-    pip install TikTokApi
+    pip install TikTokApi openai python-dotenv supabase playwright
     python -m playwright install chromium
 
 IMPORTANT: MS Token Required!
@@ -29,6 +31,18 @@ IMPORTANT: MS Token Required!
 
     Without a valid ms_token, TikTok will block all requests!
 
+Environment Variables:
+    TIKTOK_MS_TOKEN - Your TikTok ms_token (required)
+    OPENAI_API_KEY - OpenAI API key for generating search queries (optional, falls back to defaults)
+    USE_AI_QUERIES - Set to 'true' to use AI-generated queries (default: 'true')
+    NUM_SEARCH_QUERIES - Number of queries to generate (default: 15)
+    SEARCH_FOCUS_AREA - Description of what type of creators to search for
+    USERS_PER_SEARCH - Number of users to fetch per search term (default: 20)
+    FILTER_EMAILS_ONLY - Only save users with emails in bio (default: 'true')
+    SUPABASE_URL - Supabase project URL (optional)
+    SUPABASE_KEY - Supabase anon key (optional)
+    POST_TO_SUPABASE - Set to 'true' to insert profiles to Supabase (default: 'false')
+
 Usage:
     python tiktok_api_scraper.py
 """
@@ -42,8 +56,195 @@ from TikTokApi import TikTokApi
 from dotenv import load_dotenv
 import os
 from supabase import create_client, Client
+from playwright.async_api import async_playwright
+from openai import AsyncOpenAI
 
 load_dotenv()
+
+async def generate_search_queries(
+    num_queries: int = 50,
+    focus_area: str = "UGC creators and content creators who work with brands"
+) -> List[str]:
+    """
+    Generate diverse TikTok search queries using OpenAI.
+    
+    Args:
+        num_queries: Number of search queries to generate
+        focus_area: Description of what type of creators to search for
+    
+    Returns:
+        List of search query strings optimized for TikTok search
+    """
+    api_key = os.getenv('OPENAI_API_KEY')
+    
+    if not api_key:
+        print("⚠️  OPENAI_API_KEY not found in environment variables")
+        print("   Falling back to default search terms...")
+        return [
+            "ugc creator",
+            "fitness"
+            "dance"
+            "music"
+            "art"
+            "fashion"
+            "beauty"
+            "vlogger"
+            "food"
+            "travel"
+            "technology"
+            "gaming"
+            "sports"
+            "hobbies"
+            "interests"
+            "lifestyle"
+            "pets"
+            "animals"
+            "nature"
+        ]
+    
+    try:
+        client = AsyncOpenAI(api_key=api_key)
+        
+        prompt = f"""Generate {num_queries} diverse TikTok search queries to find {focus_area}.
+
+Requirements:
+- Each query should be 1-5 words, optimized for TikTok search
+- Make them varied, creative, and use different angles/terminology
+- Include hashtag-style terms, professional terms, and casual terms
+- Focus on terms that creators might use in their bios or content
+- Return a JSON object with a "queries" key containing an array of strings
+
+Example JSON format:
+{{
+  "queries": ["ugc creator", "brand collaboration", "content creator for hire", "sponsored content creator"]
+}}
+
+Generate {num_queries} unique search queries:"""
+
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini",  # Using gpt-4o-mini for cost efficiency
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a helpful assistant that generates TikTok search queries. Always return valid JSON with a 'queries' key containing an array of search query strings."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            temperature=0.95,  # Higher temperature for more creative/diverse queries
+            response_format={"type": "json_object"}
+        )
+        
+        # Parse the response
+        content = response.choices[0].message.content
+        result = json.loads(content)
+        
+        # Extract queries from the JSON object
+        queries = result.get('queries', [])
+        
+        if not queries or not isinstance(queries, list):
+            raise ValueError(f"No queries found in response. Got: {result}")
+        
+        print(f"✓ Generated {len(queries)} search queries using OpenAI")
+        return queries[:num_queries]  # Ensure we don't exceed requested amount
+        
+    except Exception as e:
+        print(f"⚠️  Error generating queries with OpenAI: {e}")
+        print("   Falling back to default search terms...")
+        return [
+            "ugc creator",
+            "user generated content",
+            "brand deals",
+            "content creator for hire",
+            "collab with brands",
+            "gifted pr",
+            "micro influencer",
+            "nano influencer"
+        ]
+
+
+async def fetch_fresh_ms_token() -> Optional[str]:
+    """
+    Fetch a fresh MS_TOKEN from TikTok's search page using Playwright.
+
+    This opens a real browser, navigates to TikTok's search page, performs a search
+    to trigger token generation, and extracts the ms_token cookie.
+
+    Returns:
+        The ms_token string, or None if extraction fails
+    """
+    print("\n" + "="*70)
+    print("FETCHING FRESH MS_TOKEN FROM TIKTOK...")
+    print("="*70)
+
+    try:
+        async with async_playwright() as p:
+            # Launch browser
+            browser = await p.chromium.launch(headless=False)
+            context = await browser.new_context()
+            page = await context.new_page()
+
+            print("🌐 Opening TikTok search page...")
+            await page.goto("https://www.tiktok.com/search", wait_until="networkidle", timeout=30000)
+
+            # Try to perform a search to trigger ms_token generation
+            print("🔍 Performing a search to trigger token generation...")
+            await page.goto("https://www.tiktok.com/search?q=test", wait_until="networkidle", timeout=30000)
+            await page.wait_for_timeout(3000)
+
+            # Wait for cookies to be set after interaction
+            await page.wait_for_timeout(2000)
+
+            print("🔍 Extracting ms_token from cookies...")
+
+            # Get all cookies multiple times (cookies might be set asynchronously)
+            ms_token = None
+            
+            for attempt in range(3):
+                cookies = await context.cookies()
+                
+                # Debug: print all cookie names (first attempt only)
+                if attempt == 0:
+                    cookie_names = [c.get('name') for c in cookies]
+                    print(f"   Found cookies: {', '.join(cookie_names[:10])}{'...' if len(cookie_names) > 10 else ''}")
+                
+                # Check for ms_token in various formats
+                for cookie in cookies:
+                    cookie_name = cookie.get('name', '').lower()
+                    
+                    # Check multiple variations: msToken, ms_token, etc.
+                    if 'mstoken' in cookie_name or cookie_name == 'ms_token':
+                        ms_token = cookie.get('value')
+                        print(f"✓ Found token cookie: {cookie.get('name')}")
+                        break
+                
+                if ms_token:
+                    break
+                    
+                # Wait a bit before next attempt
+                if attempt < 2:
+                    await page.wait_for_timeout(1000)
+
+            await browser.close()
+
+            if ms_token:
+                print(f"✓ Fresh MS_TOKEN extracted successfully!")
+                print(f"  Token: {ms_token[:20]}...{ms_token[-20:]}")
+                print("="*70 + "\n")
+                return ms_token
+            else:
+                print("✗ Could not find ms_token in cookies")
+                print("  Make sure you're not blocked by TikTok's bot detection")
+                print("="*70 + "\n")
+                return None
+
+    except Exception as e:
+        print(f"✗ Error fetching ms_token: {e}")
+        print("  Falling back to environment variable...")
+        print("="*70 + "\n")
+        return None
 
 
 class TikTokUserScraper:
@@ -349,9 +550,13 @@ class TikTokUserScraper:
                 print(f"✓ Profiles with emails: {emails_found}")
             print("="*70)
 
-            # Insert profiles to Supabase if client is initialized
-            if self.supabase:
+            # Insert profiles to Supabase if enabled and client is initialized
+            post_to_supabase = os.getenv('POST_TO_SUPABASE', 'false').lower() == 'true'
+            if post_to_supabase and self.supabase:
                 self.insert_profiles_to_supabase()
+            elif self.supabase and not post_to_supabase:
+                print("\n⚠️  Supabase client initialized but POST_TO_SUPABASE is disabled.")
+                print("   Set POST_TO_SUPABASE=true in .env to enable database inserts.")
 
     async def get_user_profile(self, username: str) -> Optional[Dict]:
         """
@@ -402,46 +607,92 @@ class TikTokUserScraper:
 async def main():
     """Main function - configure and run scraper"""
 
-    # Check for MS token
-    ms_token = os.getenv('TIKTOK_MS_TOKEN')
+    # Try to fetch a fresh MS token automatically
+    print("\n🚀 STARTING TIKTOK SCRAPER")
+    print("="*70)
+
+    ms_token = await fetch_fresh_ms_token()
+
+    # Fallback to environment variable if fetching fails
     if not ms_token:
-        print("="*70)
-        print("⚠️  WARNING: NO MS TOKEN FOUND!")
-        print("="*70)
-        print("TikTok will likely block your requests without an ms_token.")
-        print("\nHow to get your ms_token:")
-        print("1. Go to tiktok.com in your browser")
-        print("2. Do a search for any keyword")
-        print("3. Open DevTools (F12) -> Application -> Cookies -> tiktok.com")
-        print("4. Copy the 'msToken' cookie value")
-        print("5. Add to .env: TIKTOK_MS_TOKEN=your_token_here")
-        print("\nPress Enter to continue anyway, or Ctrl+C to exit...")
-        input()
+        print("⚠️  Attempting to use MS_TOKEN from environment variable...")
+        ms_token = os.getenv('TIKTOK_MS_TOKEN')
+
+        if not ms_token:
+            print("="*70)
+            print("⚠️  WARNING: NO MS TOKEN FOUND!")
+            print("="*70)
+            print("TikTok will likely block your requests without an ms_token.")
+            print("\nHow to get your ms_token:")
+            print("1. Go to tiktok.com in your browser")
+            print("2. Do a search for any keyword")
+            print("3. Open DevTools (F12) -> Application -> Cookies -> tiktok.com")
+            print("4. Copy the 'msToken' cookie value")
+            print("5. Add to .env: TIKTOK_MS_TOKEN=your_token_here")
+            print("\nPress Enter to continue anyway, or Ctrl+C to exit...")
+            input()
+        else:
+            print(f"✓ Using MS_TOKEN from environment variable")
+            print(f"  Token: {ms_token[:20]}...{ms_token[-20:]}\n")
 
     # Configuration
-    SEARCH_TERMS = [
-        "ugc creator",
-        "user generated content",
-        "brand deals",
-        "content creator for hire",
-        "collab with brands",
-        "gifted pr",
-        "micro influencer",
-        "nano influencer"
-    ]
-    USERS_PER_SEARCH = 20  # How many users to get per search term
-    FILTER_EMAILS_ONLY = True  # Only save users with emails in bio
+    USE_AI_GENERATED_QUERIES = os.getenv('USE_AI_QUERIES', 'true').lower() == 'true'
+    NUM_QUERIES_TO_GENERATE = int(os.getenv('NUM_SEARCH_QUERIES', '15'))
+    FOCUS_AREA = os.getenv('SEARCH_FOCUS_AREA', 'UGC creators and content creators who work with brands')
+    
+    USERS_PER_SEARCH = int(os.getenv('USERS_PER_SEARCH', '20'))  # How many users to get per search term
+    FILTER_EMAILS_ONLY = os.getenv('FILTER_EMAILS_ONLY', 'true').lower() == 'true'  # Only save users with emails in bio
+
+    # Generate search queries using OpenAI
+    if USE_AI_GENERATED_QUERIES:
+        print("\n" + "="*70)
+        print("GENERATING SEARCH QUERIES WITH OPENAI")
+        print("="*70)
+        print(f"Focus area: {FOCUS_AREA}")
+        print(f"Number of queries: {NUM_QUERIES_TO_GENERATE}")
+        print("="*70 + "\n")
+        
+        SEARCH_TERMS = await generate_search_queries(
+            num_queries=NUM_QUERIES_TO_GENERATE,
+            focus_area=FOCUS_AREA
+        )
+        
+        print("\nGenerated search queries:")
+        for i, term in enumerate(SEARCH_TERMS, 1):
+            print(f"  {i}. {term}")
+        print()
+    else:
+        # Use default hardcoded search terms
+        SEARCH_TERMS = [
+            "ugc creator",
+            "user generated content",
+            "brand deals",
+            "content creator for hire",
+            "collab with brands",
+            "gifted pr",
+            "micro influencer",
+            "nano influencer"
+        ]
+        print(f"Using default search terms: {', '.join(SEARCH_TERMS)}")
 
     # Get Supabase credentials from environment
     supabase_url = os.getenv('SUPABASE_URL')
     supabase_key = os.getenv('SUPABASE_KEY')
+    POST_TO_SUPABASE = os.getenv('POST_TO_SUPABASE', 'false').lower() == 'true'
 
-    # Initialize scraper
+    # Initialize scraper (will initialize Supabase client if credentials provided)
     scraper = TikTokUserScraper(
         output_file='tiktok_api_users.json',
         supabase_url=supabase_url,
         supabase_key=supabase_key
     )
+    
+    if supabase_url and supabase_key:
+        if POST_TO_SUPABASE:
+            print("✓ Supabase posting ENABLED - profiles will be inserted to database")
+        else:
+            print("⚠️  Supabase credentials found but POST_TO_SUPABASE=false")
+            print("   Profiles will be saved to JSON only. Set POST_TO_SUPABASE=true to enable database inserts.")
 
     # Search for users
     await scraper.search_users(
