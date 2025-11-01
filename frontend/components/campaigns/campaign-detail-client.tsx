@@ -1,7 +1,8 @@
 "use client";
 
+import React from "react";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Users, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +17,32 @@ import {
 import { Database } from "@/lib/database.types";
 import { format } from "date-fns";
 
+// Helper function to extract TikTok metadata
+function getTikTokInfo(metadata: any) {
+  if (!metadata?.tiktok) return null;
+
+  const tk = metadata.tiktok;
+  return {
+    username: tk.username,
+    followerCount: tk.follower_count,
+    heartCount: tk.heart_count,
+    videoCount: tk.video_count,
+    isVerified: tk.is_verified,
+    avgLikesPerVideo: tk.avg_likes_per_video,
+    likesToFollowersRatio: tk.likes_to_followers_ratio,
+  };
+}
+
+function formatNumber(num: number): string {
+  if (num >= 1000000) {
+    return (num / 1000000).toFixed(1) + "M";
+  }
+  if (num >= 1000) {
+    return (num / 1000).toFixed(1) + "K";
+  }
+  return num.toString();
+}
+
 interface CampaignDetailClientProps {
   campaign: Database["public"]["Tables"]["campaign"]["Row"];
   contacts: Array<{
@@ -23,6 +50,18 @@ interface CampaignDetailClientProps {
     assignment: Database["public"]["Tables"]["contact_campaign"]["Row"];
   }>;
 }
+
+const statusColors: Record<
+  Database["public"]["Enums"]["contact_campaign_status"],
+  string
+> = {
+  proposed: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+  negotiating:
+    "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
+  agreed: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+  delivered:
+    "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
+};
 
 const stateColors: Record<
   Database["public"]["Enums"]["campaign_state"],
@@ -41,6 +80,10 @@ export function CampaignDetailClient({
   campaign,
   contacts,
 }: CampaignDetailClientProps) {
+  const [expandedContactId, setExpandedContactId] = React.useState<string | null>(
+    null
+  );
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -162,63 +205,169 @@ export function CampaignDetailClient({
         </CardHeader>
         <CardContent>
           {contacts.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Platforms</TableHead>
-                  <TableHead>Tags</TableHead>
-                  <TableHead>Description</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {contacts.map(({ contact, assignment }) => (
-                  <TableRow key={contact.id}>
-                    <TableCell className="font-medium">
-                      {contact.firstname || ""} {contact.lastname || ""}
-                      {!contact.firstname && !contact.lastname && "No Name"}
-                    </TableCell>
-                    <TableCell>
-                      {contact.platform && contact.platform.length > 0 ? (
-                        <div className="flex gap-1 flex-wrap">
-                          {contact.platform.map((platform) => (
-                            <Badge
-                              key={platform}
-                              variant="outline"
-                              className="text-xs"
-                            >
-                              {platform}
+            <div className="space-y-4">
+              {contacts.map(({ contact, assignment }) => {
+                const tikTokInfo = getTikTokInfo(contact.metadata);
+                const isExpanded = expandedContactId === contact.id;
+
+                return (
+                  <div
+                    key={contact.id}
+                    className="border rounded-lg overflow-hidden"
+                  >
+                    {/* Contact Row */}
+                    <div
+                      className="p-4 hover:bg-accent/50 cursor-pointer transition-colors"
+                      onClick={() =>
+                        setExpandedContactId(
+                          isExpanded ? null : contact.id
+                        )
+                      }
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3">
+                            <div className="flex-1">
+                              <h3 className="font-semibold">
+                                {contact.firstname || ""} {contact.lastname || ""}
+                                {!contact.firstname && !contact.lastname && "No Name"}
+                              </h3>
+                              {tikTokInfo && (
+                                <div className="flex items-center gap-2 mt-1">
+                                  <Badge variant="outline" className="text-xs">
+                                    TikTok
+                                  </Badge>
+                                  <p className="text-sm text-muted-foreground">
+                                    {tikTokInfo.username}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                            <Badge className={statusColors[assignment.status]}>
+                              {assignment.status.charAt(0).toUpperCase() +
+                                assignment.status.slice(1)}
                             </Badge>
-                          ))}
+                          </div>
                         </div>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {contact.tags && contact.tags.length > 0 ? (
-                        <div className="flex gap-1 flex-wrap">
-                          {contact.tags.map((tag) => (
-                            <Badge
-                              key={tag}
-                              variant="secondary"
-                              className="text-xs"
-                            >
-                              {tag}
-                            </Badge>
-                          ))}
+                        <ChevronDown
+                          className={`h-5 w-5 transition-transform ${
+                            isExpanded ? "rotate-180" : ""
+                          }`}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Expanded Details */}
+                    {isExpanded && (
+                      <div className="border-t bg-muted/30 p-4 space-y-4">
+                        {/* TikTok Stats */}
+                        {tikTokInfo && (
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div>
+                              <p className="text-xs text-muted-foreground">
+                                Followers
+                              </p>
+                              <p className="font-semibold">
+                                {formatNumber(tikTokInfo.followerCount)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">
+                                Avg Likes/Video
+                              </p>
+                              <p className="font-semibold">
+                                {formatNumber(tikTokInfo.avgLikesPerVideo)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">
+                                Videos
+                              </p>
+                              <p className="font-semibold">
+                                {tikTokInfo.videoCount}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">
+                                Engagement Rate
+                              </p>
+                              <p className="font-semibold">
+                                {tikTokInfo.likesToFollowersRatio.toFixed(1)}%
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Contact Info */}
+                        <div className="space-y-2">
+                          {contact.platform && contact.platform.length > 0 && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">
+                                Platforms
+                              </p>
+                              <div className="flex gap-1 flex-wrap mt-1">
+                                {contact.platform.map((platform) => (
+                                  <Badge
+                                    key={platform}
+                                    variant="outline"
+                                    className="text-xs"
+                                  >
+                                    {platform}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {contact.tags && contact.tags.length > 0 && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">
+                                Tags
+                              </p>
+                              <div className="flex gap-1 flex-wrap mt-1">
+                                {contact.tags.map((tag) => (
+                                  <Badge
+                                    key={tag}
+                                    variant="secondary"
+                                    className="text-xs"
+                                  >
+                                    {tag}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {(assignment.description ||
+                            contact.description) && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">
+                                Description
+                              </p>
+                              <p className="text-sm text-muted-foreground mt-1">
+                                {assignment.description ||
+                                  contact.description}
+                              </p>
+                            </div>
+                          )}
+
+                          {assignment.agreed_price && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">
+                                Agreed Price
+                              </p>
+                              <p className="text-sm font-semibold">
+                                ${assignment.agreed_price}
+                              </p>
+                            </div>
+                          )}
                         </div>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {assignment.description || contact.description || "—"}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           ) : (
             <div className="text-center py-8">
               <p className="text-muted-foreground mb-4">

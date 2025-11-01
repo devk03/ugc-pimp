@@ -52,7 +52,7 @@ async def startup_event():
         existing_webhooks = agentmail_client.webhooks.list()
         webhook_exists = False
 
-        for webhook in existing_webhooks:
+        for webhook in existing_webhooks.webhooks:
             if webhook.url == WEBHOOK_URL:
                 webhook_exists = True
                 logger.info(f"Webhook already exists: {webhook.webhook_id} -> {webhook.url}")
