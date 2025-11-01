@@ -82,4 +82,4 @@ EXPOSE 8000
 #   `main:app`: Tells uvicorn to find the ASGI application instance named `app` inside the Python module `main.py`.
 #   `--host 0.0.0.0`: Makes the server listen on all available network interfaces inside the container. This is crucial for accessing the server from outside the container (via the mapped port).
 #   `--port 8000`: Specifies that the uvicorn server should listen on port 8000 inside the container (matching the `EXPOSE` instruction).
-CMD ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+CMD ["uv", "run", "uvicorn", "router.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
