@@ -87,6 +87,7 @@ export default async function CampaignDetailPage({
       created_at: assignment.created_at,
       updated_at: assignment.updated_at,
       metadata: null,
+      content_url: null, // Add missing field required by type definition
     },
   }));
 
