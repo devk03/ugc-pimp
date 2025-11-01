@@ -13,7 +13,9 @@ from prompts import (
     INITIAL_OUTREACH_SYSTEM_PROMPT,
     get_initial_outreach_user_prompt,
     NEGOTIATION_SYSTEM_PROMPT,
-    get_negotiation_context_prompt
+    get_negotiation_context_prompt,
+    AGREEMENT_CONFIRMATION_SYSTEM_PROMPT,
+    get_agreement_confirmation_user_prompt
 )
 
 logger = logging.getLogger(__name__)
@@ -35,10 +37,15 @@ router = APIRouter(
 class InitiateCampaignRequest(BaseModel):
     campaign_id: uuid.UUID
     brand_id: uuid.UUID
-    brand_metadata: dict
     product_name: str
-    product_url: str
+    product_url: Optional[str] = None
     campaign_description: str
+    # Optional fields from trigger
+    metadata: Optional[dict] = None
+    campaign_name: Optional[str] = None
+    state: Optional[str] = None
+    scheduled_start_date: Optional[str] = None
+    scheduled_end_date: Optional[str] = None
 
 class InitiateCampaignResponse(BaseModel):
     status: str
@@ -47,8 +54,7 @@ class WebhookResponse(BaseModel):
     status: str
 
 class Message(BaseModel):
-    # Required fields based on actual AgentMail webhook
-    from_: str = Field(alias="from")  # Note: It's a string, not a list!
+    from_: str = Field(alias="from")
     organization_id: str
     inbox_id: str
     thread_id: str
@@ -91,8 +97,8 @@ def get_contacts_list() -> list[dict]:
     logger.info("Fetching contacts list from Supabase")
 
     default_contacts = [
-        {"uuid": str(uuid.uuid4()), "email": "derekmillerdev@gmail.com"},
-        {"uuid": str(uuid.uuid4()), "email": "dtkunjadia@gmail.com"},
+        {"id": "688793b6-e6d6-4fc6-8aed-a55399bbe254", "email": "derekmillerdev@gmail.com"},
+        {"id": "4276764e-7364-495e-9be6-547556ba3536", "email": "dtkunjadia@gmail.com"},
     ]
 
     try:
@@ -162,33 +168,151 @@ def get_target_price(contact_id: str) -> float:
         # Default fallback price
         return 150.0
 
-def finalize_deal(campaign_id: str, contact_id: str, agreed_price: float) -> str:
+def create_contact_campaign(campaign_id: str, contact_id: str) -> dict:
     """
-    Finalize the deal by storing it in the database.
-    Returns a confirmation message.
+    Create a contact_campaign record with 'proposed' status.
+    Returns the created record or None if it fails.
     """
-    logger.info(f"Finalizing deal for campaign {campaign_id}, contact {contact_id} at ${agreed_price:.2f}")
+    logger.info(f"Creating contact_campaign record for campaign {campaign_id}, contact {contact_id}")
 
     try:
-        # Store the deal in Supabase
-        deal_data = {
+        contact_campaign_data = {
             "campaign_id": campaign_id,
             "contact_id": contact_id,
-            "agreed_price": agreed_price,
-            "status": "agreed"
+            "status": "proposed"
         }
 
-        response = supabase_client.table("deal").insert(deal_data).execute()
-        logger.info(f"Deal finalized successfully: {response.data}")
-
-        return f"Great! We have a deal at ${agreed_price:.2f}. I'll send over the contract details shortly."
+        response = supabase_client.table("contact_campaign").insert(contact_campaign_data).execute()
+        logger.info(f"contact_campaign record created: {response.data}")
+        return response.data[0] if response.data else None
 
     except Exception as e:
-        logger.error(f"Error finalizing deal: {str(e)}", exc_info=True)
-        return "I've noted our agreement. Our team will follow up with the contract details."
+        logger.error(f"Error creating contact_campaign record: {str(e)}", exc_info=True)
+        return None
 
-def generate_initial_message_body(request: 'InitiateCampaignRequest') -> dict:
-    logger.info(f"Generating initial message for campaign: {request.campaign_id}, product: {request.product_name}")
+def get_contact_campaign_status(campaign_id: str, contact_id: str) -> str:
+    """
+    Get the current status of a contact_campaign record.
+    Returns the status or None if not found.
+    """
+    logger.info(f"Fetching contact_campaign status for campaign {campaign_id}, contact {contact_id}")
+
+    try:
+        response = supabase_client.table("contact_campaign") \
+            .select("status") \
+            .eq("campaign_id", campaign_id) \
+            .eq("contact_id", contact_id) \
+            .single() \
+            .execute()
+
+        if response.data:
+            status = response.data.get("status")
+            logger.info(f"Current contact_campaign status: {status}")
+            return status
+        else:
+            logger.warning(f"No contact_campaign record found for campaign {campaign_id}, contact {contact_id}")
+            return None
+
+    except Exception as e:
+        logger.error(f"Error fetching contact_campaign status: {str(e)}", exc_info=True)
+        return None
+
+def update_contact_campaign_status(campaign_id: str, contact_id: str, status: str) -> bool:
+    """
+    Update the status of a contact_campaign record.
+    Valid statuses: 'proposed', 'negotiating', 'agreed', 'delivered'
+    Returns True if successful, False otherwise.
+    """
+    logger.info(f"Updating contact_campaign status to '{status}' for campaign {campaign_id}, contact {contact_id}")
+
+    try:
+        response = supabase_client.table("contact_campaign") \
+            .update({"status": status, "updated_at": "now()"}) \
+            .eq("campaign_id", campaign_id) \
+            .eq("contact_id", contact_id) \
+            .execute()
+
+        logger.info(f"contact_campaign status updated successfully")
+        return True
+
+    except Exception as e:
+        logger.error(f"Error updating contact_campaign status: {str(e)}", exc_info=True)
+        return False
+
+def confirm_agreement(
+    campaign_id: str,
+    contact_id: str,
+    agreed_price: float,
+    message_id: str,
+    campaign_data: dict,
+    brand_metadata: dict
+) -> dict:
+    """
+    Confirm the agreement by storing it in the database, updating status to 'agreed',
+    and sending a confirmation email with next steps.
+    Note: The deal still needs to be delivered (status will be updated to 'delivered' later).
+    Returns a dict with 'success' boolean and 'message' string.
+    """
+    logger.info(f"Confirming agreement for campaign {campaign_id}, contact {contact_id} at ${agreed_price:.2f}")
+
+    try:
+        # Update contact_campaign with agreed price and status
+        supabase_client.table("contact_campaign") \
+            .update({
+                "status": "agreed",
+                "agreed_price": agreed_price,
+                "updated_at": "now()"
+            }) \
+            .eq("campaign_id", campaign_id) \
+            .eq("contact_id", contact_id) \
+            .execute()
+
+        logger.info(f"Agreement confirmed successfully: ${agreed_price:.2f}")
+
+        # Generate and send confirmation email immediately
+        try:
+            confirmation_content = generate_confirmed_message_body(
+                agreed_price=agreed_price,
+                product_name=campaign_data.get("product", "Our Product"),
+                campaign_description=campaign_data.get("description", ""),
+                brand_metadata=brand_metadata
+            )
+
+            # Send the confirmation email
+            agentmail_client.inboxes.messages.reply(
+                inbox_id=NEGOTIATE_INBOX_ID,
+                message_id=message_id,
+                text=confirmation_content["html_body"],
+                html=confirmation_content["html_body"],
+                labels=[f"{campaign_id}:{contact_id}"]
+            )
+            logger.info("Sent confirmation email with next steps")
+            return {
+                "success": True,
+                "message": "Agreement confirmed and confirmation email sent"
+            }
+
+        except Exception as e:
+            logger.error(f"Error sending confirmation email: {str(e)}", exc_info=True)
+            return {
+                "success": True,
+                "message": "Agreement confirmed but failed to send confirmation email"
+            }
+
+    except Exception as e:
+        logger.error(f"Error confirming agreement: {str(e)}", exc_info=True)
+        return {
+            "success": False,
+            "message": "Failed to confirm agreement"
+        }
+
+def generate_initial_message_body(
+    product_name: str,
+    product_url: str,
+    campaign_description: str,
+    brand_metadata: dict
+) -> dict:
+    logger.info(f"Generating initial message for product: {product_name}")
 
     openai_api_key = os.getenv("OPENAI_API_KEY")
     if not openai_api_key:
@@ -198,10 +322,10 @@ def generate_initial_message_body(request: 'InitiateCampaignRequest') -> dict:
     openai_client = openai.OpenAI(api_key=openai_api_key)
 
     user_prompt = get_initial_outreach_user_prompt(
-        brand_metadata=request.brand_metadata,
-        product_name=request.product_name,
-        product_url=request.product_url,
-        campaign_description=request.campaign_description
+        brand_metadata=brand_metadata,
+        product_name=product_name,
+        product_url=product_url,
+        campaign_description=campaign_description
     )
 
     messages = [
@@ -228,18 +352,86 @@ def generate_initial_message_body(request: 'InitiateCampaignRequest') -> dict:
         "html_body": result.get("html_body", "")
     }
 
+def generate_confirmed_message_body(
+    agreed_price: float,
+    product_name: str,
+    campaign_description: str,
+    brand_metadata: dict
+) -> dict:
+    """
+    Generate an agreement confirmation email using OpenAI.
+    Returns a dict with 'subject' and 'html_body'.
+    """
+    logger.info(f"Generating confirmation message for agreed price: ${agreed_price:.2f}")
+
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    if not openai_api_key:
+        logger.error("OPENAI_API_KEY not found in environment variables")
+        raise RuntimeError("OPENAI_API_KEY not found in environment variables")
+
+    openai_client = openai.OpenAI(api_key=openai_api_key)
+
+    user_prompt = get_agreement_confirmation_user_prompt(
+        agreed_price=agreed_price,
+        product_name=product_name,
+        campaign_description=campaign_description,
+        brand_metadata=brand_metadata
+    )
+
+    messages = [
+        {"role": "system", "content": AGREEMENT_CONFIRMATION_SYSTEM_PROMPT},
+        {"role": "user", "content": user_prompt}
+    ]
+
+    logger.info("Calling OpenAI API to generate confirmation email")
+    completion = openai_client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=messages,
+        max_tokens=500,
+        temperature=0.7,
+        response_format={"type": "json_object"}
+    )
+
+    generated_content = completion.choices[0].message.content
+    result = json.loads(generated_content)
+
+    logger.info(f"Successfully generated confirmation email with subject: {result.get('subject', 'N/A')}")
+
+    return {
+        "subject": result.get("subject", ""),
+        "html_body": result.get("html_body", "")
+    }
+
 @router.post("/initiate", response_model=InitiateCampaignResponse)
 async def initiate_campaign(request: InitiateCampaignRequest):
     # TODO: get the actual relevant contacts for the campaign
     logger.info(f"Initiating campaign: {request.campaign_id} for brand: {request.brand_id}")
 
     try:
+        # Fetch brand metadata from database
+        try:
+            brand_response = supabase_client.table("brand") \
+                .select("*") \
+                .eq("id", str(request.brand_id)) \
+                .single() \
+                .execute()
+            brand_metadata = brand_response.data
+            logger.info(f"Fetched brand metadata for brand: {request.brand_id}")
+        except Exception as e:
+            logger.error(f"Error fetching brand metadata: {str(e)}", exc_info=True)
+            brand_metadata = {}
+
         contacts_list = get_contacts_list()
 
-        email_content = generate_initial_message_body(request)
+        email_content = generate_initial_message_body(
+            product_name=request.product_name,
+            product_url=request.product_url,
+            campaign_description=request.campaign_description,
+            brand_metadata=brand_metadata
+        )
 
         for contact in contacts_list:
-            contact_id = contact["uuid"]
+            contact_id = contact["id"]
             contact_email = contact["email"]
             logger.info(f"Sending email to {contact_email} for campaign {request.campaign_id}")
             sent_message = agentmail_client.inboxes.messages.send(
@@ -251,6 +443,9 @@ async def initiate_campaign(request: InitiateCampaignRequest):
                 html=email_content["html_body"],
             )
             logger.info(f"Email sent successfully to {contact_email}: {sent_message}")
+
+            # Create contact_campaign record with 'proposed' status
+            create_contact_campaign(str(request.campaign_id), contact_id)
 
         logger.info(f"Campaign {request.campaign_id} initiated successfully. Sent to {len(contacts_list)} contacts")
         return {"status": "campaign initiated"}
@@ -301,101 +496,173 @@ async def handle_webhook(payload: WebhookPayload):
 
         logger.info(f"Processing message for campaign: {campaign_id}, contact: {contact_id}")
 
-        try:
-            campaign_response = supabase_client.table("campaign") \
-                .select("*") \
-                .eq("id", campaign_id) \
-                .single() \
-                .execute()
-            campaign_data = campaign_response.data
-        except Exception as e:
-            logger.error(f"Error fetching campaign {campaign_id}: {str(e)}")
-            campaign_data = {
-                "product_name": "Our Product",
-                "campaign_description": "UGC Campaign"
-            }
+        # Check current contact_campaign status to determine appropriate action
+        current_status = get_contact_campaign_status(campaign_id, contact_id)
 
-        target_price = get_target_price(contact_id)
+        if not current_status:
+            logger.warning(f"No contact_campaign record found for campaign {campaign_id}, contact {contact_id}")
+            return {"status": "ignored - no contact_campaign record found"}
 
-        conversation_messages = [
-            {"role": "system", "content": NEGOTIATION_SYSTEM_PROMPT},
-            {
-                "role": "system",
-                "content": get_negotiation_context_prompt(
-                    target_price=target_price,
-                    product_name=campaign_data.get("product_name", "Our Product"),
-                    campaign_description=campaign_data.get("campaign_description", "UGC Campaign")
-                )
-            }
-        ]
+        logger.info(f"Current contact_campaign status: {current_status}")
 
-        if thread_messages:
-            for msg in thread_messages:
-                # Handle both object and dict formats
-                inbox_id = msg.inbox_id if hasattr(msg, 'inbox_id') else msg.get('inbox_id')
-                text = msg.text if hasattr(msg, 'text') else msg.get('text')
+        # Handle different states
+        if current_status == "proposed" or current_status == "negotiating":
+            # Run negotiation agent for proposed and negotiating states
+            if current_status == "proposed":
+                logger.info(f"Contact responded for the first time, transitioning to 'negotiating'")
+                update_contact_campaign_status(campaign_id, contact_id, "negotiating")
+            else:
+                logger.info(f"Continuing negotiation with contact")
 
-                if inbox_id == NEGOTIATE_INBOX_ID:
-                    role = "assistant"
-                else:
-                    role = "user"
+            # Fetch campaign data and brand metadata
+            try:
+                campaign_response = supabase_client.table("campaign") \
+                    .select("*") \
+                    .eq("id", campaign_id) \
+                    .single() \
+                    .execute()
+                campaign_data = campaign_response.data
 
-                conversation_messages.append({
-                    "role": role,
-                    "content": text
-                })
+                brand_response = supabase_client.table("brand") \
+                    .select("*") \
+                    .eq("id", campaign_data.get("brand_id")) \
+                    .single() \
+                    .execute()
+                brand_metadata = brand_response.data
+            except Exception as e:
+                logger.error(f"Error fetching campaign/brand data: {str(e)}")
+                campaign_data = {
+                    "product": "Our Product",
+                    "description": "UGC Campaign"
+                }
+                brand_metadata = {}
 
-        negotiation_tools = [
-            {
-                "type": "function",
-                "function": {
-                    "name": "finalize_deal",
-                    "description": "Finalize the deal when both parties agree on a price",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "agreed_price": {
-                                "type": "number",
-                                "description": "The final agreed price in USD",
+            target_price = get_target_price(contact_id)
+
+            # Build conversation history
+            conversation_messages = [
+                {"role": "system", "content": NEGOTIATION_SYSTEM_PROMPT},
+                {
+                    "role": "system",
+                    "content": get_negotiation_context_prompt(
+                        target_price=target_price,
+                        product_name=campaign_data.get("product", "Our Product"),
+                        campaign_description=campaign_data.get("description", "UGC Campaign")
+                    )
+                }
+            ]
+
+            if thread_messages:
+                for msg in thread_messages:
+                    inbox_id = msg.inbox_id if hasattr(msg, 'inbox_id') else msg.get('inbox_id')
+                    text = msg.text if hasattr(msg, 'text') else msg.get('text')
+
+                    if inbox_id == NEGOTIATE_INBOX_ID:
+                        role = "assistant"
+                    else:
+                        role = "user"
+
+                    conversation_messages.append({
+                        "role": role,
+                        "content": text
+                    })
+
+            # Setup negotiation tools
+            negotiation_tools = [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "confirm_agreement",
+                        "description": "Confirm the agreement when both parties agree on a price. This will immediately send a confirmation email with next steps.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "agreed_price": {
+                                    "type": "number",
+                                    "description": "The final agreed price in USD",
+                                },
                             },
+                            "required": ["agreed_price"],
                         },
-                        "required": ["agreed_price"],
                     },
-                },
+                }
+            ]
+
+            # Track if agreement was confirmed
+            agreement_confirmed = False
+
+            def confirm_agreement_wrapper(agreed_price: float) -> str:
+                nonlocal agreement_confirmed
+                result = confirm_agreement(
+                    campaign_id=campaign_id,
+                    contact_id=contact_id,
+                    agreed_price=agreed_price,
+                    message_id=message.message_id,
+                    campaign_data=campaign_data,
+                    brand_metadata=brand_metadata
+                )
+                agreement_confirmed = result.get("success", False)
+                return result.get("message", "Agreement processed")
+
+            available_tools_map = {
+                "confirm_agreement": confirm_agreement_wrapper
             }
-        ]
 
-        def finalize_deal_wrapper(agreed_price: float) -> str:
-            return finalize_deal(campaign_id, contact_id, agreed_price)
+            # Run the negotiation agent
+            agent_response = run_conversation(
+                conversation_messages,
+                negotiation_tools,
+                available_tools_map
+            )
 
-        available_tools_map = {
-            "finalize_deal": finalize_deal_wrapper
-        }
-        agent_response = run_conversation(
-            conversation_messages,
-            negotiation_tools,
-            available_tools_map
-        )
+            if not agent_response:
+                logger.error("Agent returned no response")
+                return {"status": "error - no agent response"}
 
-        if not agent_response:
-            logger.error("Agent returned no response")
-            return {"status": "error - no agent response"}
+            # If agreement was confirmed, confirmation email was already sent
+            if agreement_confirmed:
+                logger.info("Agreement confirmed, confirmation email already sent")
+                return {"status": "success - agreement confirmed"}
 
-        response_text = agent_response.content
+            # Otherwise, send the agent's negotiation response
+            response_text = agent_response.content
+            logger.info(f"Sending negotiation response to thread: {message.thread_id}")
 
-        # Send response via AgentMail using reply method
-        logger.info(f"Sending agent response to thread: {message.thread_id}")
+            agentmail_client.inboxes.messages.reply(
+                inbox_id=NEGOTIATE_INBOX_ID,
+                message_id=message.message_id,
+                text=response_text,
+                labels=[f"{campaign_id}:{contact_id}"]
+            )
 
-        # Use messages.reply() to reply to the incoming message
-        agentmail_client.inboxes.messages.reply(
-            inbox_id=NEGOTIATE_INBOX_ID,
-            message_id=message.message_id,
-            text=response_text,
-            labels=[f"{campaign_id}:{contact_id}"]  # Preserve our campaign labels
-        )
+            logger.info("Negotiation response sent successfully")
+            return {"status": "success"}
 
-        logger.info("Response sent successfully")
-        return {"status": "success"}
+        elif current_status == "agreed":
+            # Deal is already agreed, remind them to deliver content
+            logger.info(f"Deal is already agreed. Reminding contact to deliver content.")
+            response_text = "Thank you for your message! We've already confirmed our agreement. To complete the process and receive payment, please create and post your content, then share the link with us here."
+            agentmail_client.inboxes.messages.reply(
+                inbox_id=NEGOTIATE_INBOX_ID,
+                message_id=message.message_id,
+                text=response_text,
+                labels=[f"{campaign_id}:{contact_id}"]
+            )
+            logger.info("Sent delivery reminder")
+            return {"status": "success - sent delivery reminder"}
+
+        elif current_status == "delivered":
+            # Content already delivered, handle follow-up questions
+            logger.info(f"Content already delivered. Contact may have follow-up questions.")
+            response_text = "Thank you for reaching out! Your content has been delivered. If you have any questions or concerns, our team will get back to you shortly."
+            agentmail_client.inboxes.messages.reply(
+                inbox_id=NEGOTIATE_INBOX_ID,
+                message_id=message.message_id,
+                text=response_text,
+                labels=[f"{campaign_id}:{contact_id}"]
+            )
+            logger.info("Sent acknowledgment for delivered content")
+            return {"status": "success - acknowledged delivered content"}
 
     except Exception as e:
         logger.error(f"Error handling webhook: {str(e)}", exc_info=True)
