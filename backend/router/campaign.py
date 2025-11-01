@@ -320,13 +320,31 @@ def confirm_agreement(
 
         logger.info(f"Agreement confirmed successfully: ${agreed_price:.2f}")
 
+        # Fetch contact data to get creator name
+        creator_name = None
+        try:
+            contact_response = supabase_client.table("contact") \
+                .select("firstname, lastname") \
+                .eq("id", contact_id) \
+                .single() \
+                .execute()
+            
+            if contact_response.data:
+                firstname = contact_response.data.get("firstname", "").strip()
+                lastname = contact_response.data.get("lastname", "").strip()
+                creator_name = f"{firstname} {lastname}".strip() if firstname or lastname else None
+                logger.info(f"Fetched creator name: {creator_name}")
+        except Exception as e:
+            logger.warning(f"Could not fetch creator name for {contact_id}: {str(e)}")
+
         # Generate and send confirmation email immediately
         try:
             confirmation_content = generate_confirmed_message_body(
                 agreed_price=agreed_price,
                 product_name=campaign_data.get("product", "Our Product"),
                 campaign_description=campaign_data.get("description", ""),
-                brand_metadata=brand_metadata
+                brand_metadata=brand_metadata,
+                creator_name=creator_name
             )
 
             # Send the confirmation email
@@ -516,13 +534,15 @@ def generate_confirmed_message_body(
     agreed_price: float,
     product_name: str,
     campaign_description: str,
-    brand_metadata: dict
+    brand_metadata: dict,
+    creator_name: str = None
 ) -> dict:
     """
     Generate an agreement confirmation email using OpenAI.
     Returns a dict with 'subject' and 'html_body'.
     """
-    logger.info(f"Generating confirmation message for agreed price: ${agreed_price:.2f}")
+    logger.info(f"Generating confirmation message for agreed price: ${agreed_price:.2f}" + 
+                (f" for creator: {creator_name}" if creator_name else ""))
 
     openai_api_key = os.getenv("OPENAI_API_KEY")
     if not openai_api_key:
@@ -535,7 +555,8 @@ def generate_confirmed_message_body(
         agreed_price=agreed_price,
         product_name=product_name,
         campaign_description=campaign_description,
-        brand_metadata=brand_metadata
+        brand_metadata=brand_metadata,
+        creator_name=creator_name
     )
 
     messages = [
