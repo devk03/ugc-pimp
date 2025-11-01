@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { MoreHorizontal, Trash2 } from 'lucide-react';
+import { MoreHorizontal, Trash2, Eye } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,8 +18,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import Link from 'next/link';
 import { useState } from 'react';
+import { format } from 'date-fns';
 
 interface Campaign {
   id: string;
@@ -47,6 +55,8 @@ const stateColors: Record<string, string> = {
 
 export function CampaignTable({ campaigns }: CampaignTableProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'N/A';
@@ -99,6 +109,16 @@ export function CampaignTable({ campaigns }: CampaignTableProps) {
     }
   };
 
+  const handleOpenDetails = (campaign: Campaign) => {
+    setSelectedCampaign(campaign);
+    setIsDialogOpen(true);
+  };
+
+  const handleCloseDialog = () => {
+    setIsDialogOpen(false);
+    setSelectedCampaign(null);
+  };
+
   return (
     <div className="rounded-md border">
       <Table>
@@ -114,7 +134,11 @@ export function CampaignTable({ campaigns }: CampaignTableProps) {
         </TableHeader>
         <TableBody>
           {campaigns.map((campaign) => (
-            <TableRow key={campaign.id} className="hover:bg-muted/50">
+            <TableRow
+              key={campaign.id}
+              className="hover:bg-muted/50 cursor-pointer"
+              onClick={() => handleOpenDetails(campaign)}
+            >
               <TableCell className="font-medium">{campaign.name}</TableCell>
               <TableCell>{campaign.product}</TableCell>
               <TableCell>
@@ -169,6 +193,83 @@ export function CampaignTable({ campaigns }: CampaignTableProps) {
           ))}
         </TableBody>
       </Table>
+
+      {/* Campaign Details Modal */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          {selectedCampaign && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-2xl">{selectedCampaign.name}</DialogTitle>
+                <DialogDescription className="text-base">
+                  Campaign ID: {selectedCampaign.id}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-6 py-4">
+                {/* Status and Budget Row */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-2">Status</p>
+                    <Badge className={stateColors[selectedCampaign.state || 'DRAFT']}>
+                      {selectedCampaign.state || 'DRAFT'}
+                    </Badge>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-2">Budget</p>
+                    <p className="text-lg font-semibold">
+                      {formatCurrency(selectedCampaign.spend)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Product */}
+                {selectedCampaign.product && (
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-2">Product</p>
+                    <p className="text-base">{selectedCampaign.product}</p>
+                  </div>
+                )}
+
+                {/* Description */}
+                {selectedCampaign.description && (
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-2">Description</p>
+                    <p className="text-base text-foreground">{selectedCampaign.description}</p>
+                  </div>
+                )}
+
+                {/* Created Date */}
+                {selectedCampaign.created_at && (
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-2">Created</p>
+                    <p className="text-base">
+                      {format(new Date(selectedCampaign.created_at), 'MMM dd, yyyy HH:mm')}
+                    </p>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex gap-2 pt-4">
+                  <Button asChild>
+                    <Link href={`/dashboard/campaigns/${selectedCampaign.id}`}>
+                      <Eye className="h-4 w-4 mr-2" />
+                      View Full Details
+                    </Link>
+                  </Button>
+                  {canEdit(selectedCampaign.state) && (
+                    <Button asChild variant="outline">
+                      <Link href={`/dashboard/campaigns/${selectedCampaign.id}/edit`}>
+                        Edit Campaign
+                      </Link>
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

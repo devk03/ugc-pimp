@@ -4,7 +4,8 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "supabase:gen-types": "npx supabase gen types typescript --project-id qnfzurgmszeoltabuxwj --schema public > lib/database.types.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

@@ -54,22 +54,40 @@ export type Database = {
       }
       brand: {
         Row: {
+          company_name: string | null
+          contact_phone: string | null
           created_at: string
+          guidelines_dos_donts: string | null
+          guidelines_tone: string | null
           id: string
+          industry: string | null
+          logo_url: string | null
           metadata: Json | null
           profile_id: string | null
           updated_at: string
         }
         Insert: {
+          company_name?: string | null
+          contact_phone?: string | null
           created_at?: string
+          guidelines_dos_donts?: string | null
+          guidelines_tone?: string | null
           id?: string
+          industry?: string | null
+          logo_url?: string | null
           metadata?: Json | null
           profile_id?: string | null
           updated_at?: string
         }
         Update: {
+          company_name?: string | null
+          contact_phone?: string | null
           created_at?: string
+          guidelines_dos_donts?: string | null
+          guidelines_tone?: string | null
           id?: string
+          industry?: string | null
+          logo_url?: string | null
           metadata?: Json | null
           profile_id?: string | null
           updated_at?: string
@@ -136,6 +154,7 @@ export type Database = {
         Row: {
           created_at: string
           description: string | null
+          email: string | null
           firstname: string | null
           id: string
           lastname: string | null
@@ -147,6 +166,7 @@ export type Database = {
         Insert: {
           created_at?: string
           description?: string | null
+          email?: string | null
           firstname?: string | null
           id?: string
           lastname?: string | null
@@ -158,6 +178,7 @@ export type Database = {
         Update: {
           created_at?: string
           description?: string | null
+          email?: string | null
           firstname?: string | null
           id?: string
           lastname?: string | null
@@ -170,30 +191,36 @@ export type Database = {
       }
       contact_campaign: {
         Row: {
+          agreed_price: number | null
           campaign_id: string
           contact_id: string
           created_at: string
           description: string | null
           id: string
           metadata: Json | null
+          status: Database["public"]["Enums"]["contact_campaign_status"]
           updated_at: string
         }
         Insert: {
+          agreed_price?: number | null
           campaign_id: string
           contact_id: string
           created_at?: string
           description?: string | null
           id?: string
           metadata?: Json | null
+          status?: Database["public"]["Enums"]["contact_campaign_status"]
           updated_at?: string
         }
         Update: {
+          agreed_price?: number | null
           campaign_id?: string
           contact_id?: string
           created_at?: string
           description?: string | null
           id?: string
           metadata?: Json | null
+          status?: Database["public"]["Enums"]["contact_campaign_status"]
           updated_at?: string
         }
         Relationships: [
@@ -229,6 +256,11 @@ export type Database = {
         | "COMPLETED"
         | "ARCHIVED"
         | "DELETED"
+      contact_campaign_status:
+        | "proposed"
+        | "negotiating"
+        | "agreed"
+        | "delivered"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -364,6 +396,12 @@ export const Constants = {
         "COMPLETED",
         "ARCHIVED",
         "DELETED",
+      ],
+      contact_campaign_status: [
+        "proposed",
+        "negotiating",
+        "agreed",
+        "delivered",
       ],
     },
   },
