@@ -9,13 +9,21 @@ import os
 import openai
 import json
 import logging
+import re
 from prompts import (
     INITIAL_OUTREACH_SYSTEM_PROMPT,
     get_initial_outreach_user_prompt,
     NEGOTIATION_SYSTEM_PROMPT,
     get_negotiation_context_prompt,
     AGREEMENT_CONFIRMATION_SYSTEM_PROMPT,
-    get_agreement_confirmation_user_prompt
+    get_agreement_confirmation_user_prompt,
+    get_content_approval_message,
+    get_content_rejection_message,
+    get_content_url_reminder_message,
+    get_content_submission_acknowledgment,
+    get_pending_verification_acknowledgment,
+    get_delivered_content_acknowledgment,
+    get_content_submission_error_message
 )
 
 logger = logging.getLogger(__name__)
@@ -306,6 +314,43 @@ def confirm_agreement(
             "message": "Failed to confirm agreement"
         }
 
+def strip_quoted_content(text: str) -> str:
+    """
+    Remove quoted content from email replies to get only the new message content.
+    Removes lines starting with '>' and content after common quote markers.
+    """
+    lines = text.split('\n')
+    new_lines = []
+
+    for line in lines:
+        # Stop at common email quote markers
+        if line.strip().startswith('>'):
+            continue
+        if 'wrote:' in line.lower() or 'on ' in line.lower() and 'wrote:' in line.lower():
+            break
+        if line.strip().startswith('----'):
+            break
+        new_lines.append(line)
+
+    return '\n'.join(new_lines)
+
+def extract_urls_from_text(text: str) -> list[str]:
+    """
+    Extract all URLs from a text message.
+    Returns a list of valid URLs found in the text.
+    """
+    # Strip quoted content to only get URLs from the new message
+    clean_text = strip_quoted_content(text)
+
+    # URL pattern that matches http/https URLs
+    url_pattern = r'https?://(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&/=]*)'
+    urls = re.findall(url_pattern, clean_text)
+
+    logger.info(f"Extracted {len(urls)} URLs from text (after removing quoted content)")
+    return urls
+
+# verify_content_relevance function removed - manual verification now used instead
+
 def generate_initial_message_body(
     product_name: str,
     product_url: str,
@@ -402,6 +447,29 @@ def generate_confirmed_message_body(
         "html_body": result.get("html_body", "")
     }
 
+class PendingVerification(BaseModel):
+    id: str
+    campaign_id: str
+    campaign_name: str
+    contact_id: str
+    contact_name: str
+    contact_email: str
+    content_url: str
+    agreed_price: float
+    submitted_at: str
+
+class PendingVerificationsResponse(BaseModel):
+    verifications: list[PendingVerification]
+
+class VerifyContentRequest(BaseModel):
+    contact_campaign_id: str
+    approved: bool
+    rejection_reason: Optional[str] = None
+
+class VerifyContentResponse(BaseModel):
+    status: str
+    message: str
+
 @router.post("/initiate", response_model=InitiateCampaignResponse)
 async def initiate_campaign(request: InitiateCampaignRequest):
     # TODO: get the actual relevant contacts for the campaign
@@ -451,6 +519,204 @@ async def initiate_campaign(request: InitiateCampaignRequest):
         return {"status": "campaign initiated"}
     except Exception as e:
         logger.error(f"Error initiating campaign {request.campaign_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/pending-verifications", response_model=PendingVerificationsResponse)
+async def get_pending_verifications(campaign_id: Optional[str] = None, brand_id: Optional[str] = None):
+    """
+    Get all pending content verifications, optionally filtered by campaign_id or brand_id.
+    """
+    logger.info(f"Fetching pending verifications for campaign_id={campaign_id}, brand_id={brand_id}")
+
+    try:
+        # Build the query
+        query = supabase_client.table("contact_campaign") \
+            .select("id, campaign_id, contact_id, content_url, agreed_price, updated_at, campaign(*), contact(*)") \
+            .eq("status", "pending_verification")
+
+        if campaign_id:
+            query = query.eq("campaign_id", campaign_id)
+        elif brand_id:
+            # Filter by brand_id through campaign relationship
+            query = query.eq("campaign.brand_id", brand_id)
+
+        response = query.execute()
+
+        verifications = []
+        for item in response.data:
+            campaign_data = item.get("campaign", {})
+            contact_data = item.get("contact", {})
+
+            # Handle both dict and list responses for nested data
+            if isinstance(campaign_data, list) and len(campaign_data) > 0:
+                campaign_data = campaign_data[0]
+            if isinstance(contact_data, list) and len(contact_data) > 0:
+                contact_data = contact_data[0]
+
+            verifications.append(PendingVerification(
+                id=item["id"],
+                campaign_id=item["campaign_id"],
+                campaign_name=campaign_data.get("name", "Unknown Campaign") if campaign_data else "Unknown Campaign",
+                contact_id=item["contact_id"],
+                contact_name=f"{contact_data.get('firstname', '')} {contact_data.get('lastname', '')}".strip() if contact_data else "Unknown",
+                contact_email=contact_data.get("email", "") if contact_data else "",
+                content_url=item.get("content_url", ""),
+                agreed_price=item.get("agreed_price", 0.0),
+                submitted_at=item.get("updated_at", "")
+            ))
+
+        logger.info(f"Found {len(verifications)} pending verifications")
+        return {"verifications": verifications}
+
+    except Exception as e:
+        logger.error(f"Error fetching pending verifications: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/verify-content", response_model=VerifyContentResponse)
+async def verify_content(request: VerifyContentRequest):
+    """
+    Manually approve or reject submitted content.
+    - If approved: status changes to 'delivered'
+    - If rejected: status changes back to 'agreed' and creator is notified
+    """
+    logger.info(f"Verifying content for contact_campaign_id={request.contact_campaign_id}, approved={request.approved}")
+
+    try:
+        # Fetch the contact_campaign record
+        cc_response = supabase_client.table("contact_campaign") \
+            .select("*, campaign(*), contact(*)") \
+            .eq("id", request.contact_campaign_id) \
+            .single() \
+            .execute()
+
+        if not cc_response.data:
+            raise HTTPException(status_code=404, detail="Contact campaign not found")
+
+        cc_data = cc_response.data
+        campaign_id = cc_data["campaign_id"]
+        contact_id = cc_data["contact_id"]
+
+        if cc_data["status"] != "pending_verification":
+            raise HTTPException(status_code=400, detail=f"Content is not pending verification (current status: {cc_data['status']})")
+
+        if request.approved:
+            # Approve: Update status to 'delivered'
+            supabase_client.table("contact_campaign") \
+                .update({
+                    "status": "delivered",
+                    "updated_at": "now()"
+                }) \
+                .eq("id", request.contact_campaign_id) \
+                .execute()
+
+            logger.info(f"Content approved and marked as delivered for contact_campaign {request.contact_campaign_id}")
+
+            # Send email notification to creator about approval
+            try:
+                contact_data = cc_data.get("contact", {})
+                campaign_data = cc_data.get("campaign", {})
+
+                # Handle both dict and list responses for nested data
+                if isinstance(contact_data, list) and len(contact_data) > 0:
+                    contact_data = contact_data[0]
+                if isinstance(campaign_data, list) and len(campaign_data) > 0:
+                    campaign_data = campaign_data[0]
+
+                contact_email = contact_data.get("email") if contact_data else None
+                campaign_name = campaign_data.get("name", "the campaign") if campaign_data else "the campaign"
+                agreed_price = cc_data.get("agreed_price", 0)
+
+                if contact_email:
+                    approval_message = get_content_approval_message(
+                        campaign_name=campaign_name,
+                        agreed_price=agreed_price,
+                        content_url=cc_data.get('content_url', 'N/A')
+                    )
+
+                    agentmail_client.inboxes.messages.send(
+                        inbox_id=NEGOTIATE_INBOX_ID,
+                        to=contact_email,
+                        subject=f"Content Approved - {campaign_name}",
+                        text=approval_message,
+                        labels=[f"{campaign_id}:{contact_id}"]
+                    )
+                    logger.info(f"Sent approval email to {contact_email}")
+                else:
+                    logger.warning(f"No email found for contact {contact_id}, skipping approval notification")
+
+            except Exception as e:
+                logger.error(f"Error sending approval email: {str(e)}", exc_info=True)
+                # Don't fail the request if email fails
+
+            return {
+                "status": "success",
+                "message": "Content approved and marked as delivered"
+            }
+        else:
+            # Reject: Update status back to 'agreed'
+            supabase_client.table("contact_campaign") \
+                .update({
+                    "status": "agreed",
+                    "content_url": None,  # Clear the rejected URL
+                    "updated_at": "now()"
+                }) \
+                .eq("id", request.contact_campaign_id) \
+                .execute()
+
+            logger.info(f"Content rejected for contact_campaign {request.contact_campaign_id}")
+
+            # Send email notification to creator about rejection
+            try:
+                contact_data = cc_data.get("contact", {})
+                campaign_data = cc_data.get("campaign", {})
+
+                # Handle both dict and list responses for nested data
+                if isinstance(contact_data, list) and len(contact_data) > 0:
+                    contact_data = contact_data[0]
+                if isinstance(campaign_data, list) and len(campaign_data) > 0:
+                    campaign_data = campaign_data[0]
+
+                contact_email = contact_data.get("email") if contact_data else None
+                campaign_name = campaign_data.get("name", "the campaign") if campaign_data else "the campaign"
+                agreed_price = cc_data.get("agreed_price", 0)
+                rejected_url = cc_data.get("content_url", "N/A")
+
+                if contact_email:
+                    rejection_message = get_content_rejection_message(
+                        campaign_name=campaign_name,
+                        agreed_price=agreed_price,
+                        rejected_url=rejected_url,
+                        rejection_reason=request.rejection_reason
+                    )
+
+                    agentmail_client.inboxes.messages.send(
+                        inbox_id=NEGOTIATE_INBOX_ID,
+                        to=contact_email,
+                        subject=f"Content Needs Revision - {campaign_name}",
+                        text=rejection_message,
+                        labels=[f"{campaign_id}:{contact_id}"]
+                    )
+                    logger.info(f"Sent rejection email to {contact_email}")
+                    if request.rejection_reason:
+                        logger.info(f"Rejection reason: {request.rejection_reason}")
+                else:
+                    logger.warning(f"No email found for contact {contact_id}, skipping rejection notification")
+                    if request.rejection_reason:
+                        logger.info(f"Rejection reason: {request.rejection_reason}")
+
+            except Exception as e:
+                logger.error(f"Error sending rejection email: {str(e)}", exc_info=True)
+                # Don't fail the request if email fails
+
+            return {
+                "status": "success",
+                "message": "Content rejected, status reset to 'agreed'"
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error verifying content: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/receive-message", response_model=WebhookResponse)
@@ -639,22 +905,80 @@ async def handle_webhook(payload: WebhookPayload):
             return {"status": "success"}
 
         elif current_status == "agreed":
-            # Deal is already agreed, remind them to deliver content
-            logger.info(f"Deal is already agreed. Reminding contact to deliver content.")
-            response_text = "Thank you for your message! We've already confirmed our agreement. To complete the process and receive payment, please create and post your content, then share the link with us here."
+            # Deal is agreed, waiting for deliverable content URL
+            logger.info(f"Deal is agreed. Checking for deliverable content URL.")
+
+            # Extract URLs from the message
+            urls = extract_urls_from_text(message.text)
+
+            if not urls:
+                # No URLs found, remind them to provide one
+                logger.info("No URLs found in message. Reminding contact to provide content link.")
+                response_text = get_content_url_reminder_message()
+                agentmail_client.inboxes.messages.reply(
+                    inbox_id=NEGOTIATE_INBOX_ID,
+                    message_id=message.message_id,
+                    text=response_text,
+                    labels=[f"{campaign_id}:{contact_id}"]
+                )
+                logger.info("Sent reminder to provide content URL")
+                return {"status": "success - requested content URL"}
+
+            # Store the URL and update status to pending_verification
+            submitted_url = urls[0]  # Take the first URL
+            logger.info(f"Content URL submitted: {submitted_url}")
+
+            try:
+                supabase_client.table("contact_campaign") \
+                    .update({
+                        "status": "pending_verification",
+                        "content_url": submitted_url,
+                        "updated_at": "now()"
+                    }) \
+                    .eq("campaign_id", campaign_id) \
+                    .eq("contact_id", contact_id) \
+                    .execute()
+
+                response_text = get_content_submission_acknowledgment()
+
+                agentmail_client.inboxes.messages.reply(
+                    inbox_id=NEGOTIATE_INBOX_ID,
+                    message_id=message.message_id,
+                    text=response_text,
+                    labels=[f"{campaign_id}:{contact_id}"]
+                )
+
+                logger.info(f"Content URL stored and status updated to pending_verification")
+                return {"status": "success - content pending verification"}
+
+            except Exception as e:
+                logger.error(f"Error updating contact_campaign to pending_verification: {str(e)}", exc_info=True)
+                response_text = get_content_submission_error_message()
+                agentmail_client.inboxes.messages.reply(
+                    inbox_id=NEGOTIATE_INBOX_ID,
+                    message_id=message.message_id,
+                    text=response_text,
+                    labels=[f"{campaign_id}:{contact_id}"]
+                )
+                return {"status": "error - failed to update status"}
+
+        elif current_status == "pending_verification":
+            # Content is pending manual verification
+            logger.info(f"Content is pending verification. Acknowledging message.")
+            response_text = get_pending_verification_acknowledgment()
             agentmail_client.inboxes.messages.reply(
                 inbox_id=NEGOTIATE_INBOX_ID,
                 message_id=message.message_id,
                 text=response_text,
                 labels=[f"{campaign_id}:{contact_id}"]
             )
-            logger.info("Sent delivery reminder")
-            return {"status": "success - sent delivery reminder"}
+            logger.info("Sent acknowledgment for pending verification")
+            return {"status": "success - acknowledged pending verification"}
 
         elif current_status == "delivered":
             # Content already delivered, handle follow-up questions
             logger.info(f"Content already delivered. Contact may have follow-up questions.")
-            response_text = "Thank you for reaching out! Your content has been delivered. If you have any questions or concerns, our team will get back to you shortly."
+            response_text = get_delivered_content_acknowledgment()
             agentmail_client.inboxes.messages.reply(
                 inbox_id=NEGOTIATE_INBOX_ID,
                 message_id=message.message_id,

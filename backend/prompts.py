@@ -72,3 +72,58 @@ def get_agreement_confirmation_user_prompt(
         "- html_body: The HTML email body\n\n"
         "IMPORTANT: Return ONLY valid JSON, no other text."
     )
+
+# Content delivery message templates
+
+def get_content_approval_message(
+    campaign_name: str,
+    agreed_price: float,
+    content_url: str
+) -> str:
+    return f"""Great news! Your content has been approved and marked as delivered.
+
+Campaign: {campaign_name}
+Agreed Price: ${agreed_price:.2f}
+Content URL: {content_url}
+
+Our team has verified that your content meets all the campaign requirements. Your payment of ${agreed_price:.2f} will be processed shortly.
+
+Thank you for your great work!"""
+
+def get_content_rejection_message(
+    campaign_name: str,
+    agreed_price: float,
+    rejected_url: str,
+    rejection_reason: str = None
+) -> str:
+    message = f"""Thank you for submitting your content. Unfortunately, we need you to resubmit.
+
+Campaign: {campaign_name}
+Agreed Price: ${agreed_price:.2f}
+Submitted URL: {rejected_url}
+
+"""
+    if rejection_reason:
+        message += f"Reason: {rejection_reason}\n\n"
+    else:
+        message += "Our team reviewed your content and found it doesn't meet the campaign requirements.\n\n"
+
+    message += """Please review the campaign requirements and submit new content that clearly features and promotes the product. Simply reply to this email with your updated content link.
+
+Thank you for your understanding!"""
+    return message
+
+def get_content_url_reminder_message() -> str:
+    return "Thank you for your message! To complete the process and receive payment, please share the link to your posted content (e.g., Instagram post, TikTok video, YouTube video, etc.)."
+
+def get_content_submission_acknowledgment() -> str:
+    return "Thank you for submitting your content! Our team will review it to make sure it meets the campaign requirements. We'll get back to you shortly with confirmation or feedback."
+
+def get_pending_verification_acknowledgment() -> str:
+    return "Thank you for your message! Your content is currently being reviewed by our team. We'll get back to you shortly with an update."
+
+def get_delivered_content_acknowledgment() -> str:
+    return "Thank you for reaching out! Your content has been delivered. If you have any questions or concerns, our team will get back to you shortly."
+
+def get_content_submission_error_message() -> str:
+    return "We received your content link, but encountered an error saving it. Our team will review this manually."
