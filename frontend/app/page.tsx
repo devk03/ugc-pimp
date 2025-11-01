@@ -19,7 +19,7 @@ export default function Home() {
           <div className="w-full max-w-7xl flex justify-between items-center p-3 px-5 text-sm">
             <div className="flex gap-5 items-center">
               <Link href={"/"} className="font-bold text-xl bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-                UGC Pimp
+                UGC P.I.M.P. -- User Generated Content Performance Incentivized MarketPlace
               </Link>
             </div>
             {!hasEnvVars ? <EnvVarWarning /> : <AuthButton />}
