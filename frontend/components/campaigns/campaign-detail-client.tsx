@@ -2,10 +2,20 @@
 
 import React from "react";
 import Link from "next/link";
-import { ArrowLeft, Users, ChevronDown } from "lucide-react";
+import { ArrowLeft, Users, ChevronDown, CheckCircle2, XCircle, ExternalLink, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -51,14 +61,15 @@ interface CampaignDetailClientProps {
   }>;
 }
 
-const statusColors: Record<
-  Database["public"]["Enums"]["contact_campaign_status"],
-  string
-> = {
+type ContactCampaignStatus = Database["public"]["Enums"]["contact_campaign_status"] | "pending_verification";
+
+const statusColors: Partial<Record<ContactCampaignStatus, string>> & Record<string, string> = {
   proposed: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
   negotiating:
     "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
   agreed: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+  pending_verification:
+    "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
   delivered:
     "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
 };
@@ -83,6 +94,93 @@ export function CampaignDetailClient({
   const [expandedContactId, setExpandedContactId] = React.useState<string | null>(
     null
   );
+  const [rejectionDialogOpen, setRejectionDialogOpen] = React.useState(false);
+  const [rejectingContactId, setRejectingContactId] = React.useState<string | null>(null);
+  const [rejectionReason, setRejectionReason] = React.useState("");
+  const [verifyingContactId, setVerifyingContactId] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const handleApprove = async (contactCampaignId: string, contactId: string) => {
+    setError(null);
+    setVerifyingContactId(contactId);
+
+    try {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8080';
+      const response = await fetch(`${backendUrl}/api/v1/campaign/verify-content`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contact_campaign_id: contactCampaignId,
+          approved: true,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || data.detail || "Failed to approve content");
+      }
+
+      // Refresh the page to show updated status
+      window.location.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
+      setVerifyingContactId(null);
+    }
+  };
+
+  const handleReject = (contactCampaignId: string, contactId: string) => {
+    setRejectingContactId(contactCampaignId);
+    setRejectionReason("");
+    setError(null);
+    setRejectionDialogOpen(true);
+  };
+
+  const confirmRejection = async () => {
+    if (!rejectingContactId) return;
+
+    setError(null);
+    const contactId = contacts.find(
+      (c) => c.assignment.id === rejectingContactId
+    )?.contact.id;
+    if (!contactId) return;
+
+    setVerifyingContactId(contactId);
+
+    try {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8080';
+      const response = await fetch(`${backendUrl}/api/v1/campaign/verify-content`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contact_campaign_id: rejectingContactId,
+          approved: false,
+          rejection_reason: rejectionReason || null,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || data.detail || "Failed to reject content");
+      }
+
+      setRejectionDialogOpen(false);
+      setRejectingContactId(null);
+      setRejectionReason("");
+      // Refresh the page to show updated status
+      window.location.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
+      setVerifyingContactId(null);
+    }
+  };
+
+  const isPendingVerification = (status: string) => {
+    return status === "pending_verification";
+  };
 
   return (
     <div className="space-y-6">
@@ -362,6 +460,76 @@ export function CampaignDetailClient({
                             </div>
                           )}
                         </div>
+
+                        {/* Content Review Section - Only show for pending_verification */}
+                        {isPendingVerification(assignment.status) && assignment.content_url && (
+                          <div className="border-t pt-4 mt-4 space-y-4">
+                            <div>
+                              <p className="text-sm font-semibold mb-2">
+                                Submitted Content
+                              </p>
+                              <div className="flex items-center gap-2 mb-3">
+                                <a
+                                  href={assignment.content_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 flex items-center gap-1"
+                                >
+                                  <ExternalLink className="h-4 w-4" />
+                                  View Content
+                                </a>
+                              </div>
+                              {error && verifyingContactId === contact.id && (
+                                <p className="text-sm text-red-600 dark:text-red-400 mt-2">
+                                  {error}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleApprove(assignment.id, contact.id);
+                                }}
+                                disabled={verifyingContactId === contact.id}
+                                className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                              >
+                                {verifyingContactId === contact.id ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    Approving...
+                                  </>
+                                ) : (
+                                  <>
+                                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                                    Approve
+                                  </>
+                                )}
+                              </Button>
+                              <Button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleReject(assignment.id, contact.id);
+                                }}
+                                disabled={verifyingContactId === contact.id}
+                                variant="destructive"
+                                className="flex-1"
+                              >
+                                {verifyingContactId === contact.id ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    Rejecting...
+                                  </>
+                                ) : (
+                                  <>
+                                    <XCircle className="h-4 w-4 mr-2" />
+                                    Reject
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -382,6 +550,63 @@ export function CampaignDetailClient({
           )}
         </CardContent>
       </Card>
+
+      {/* Rejection Dialog */}
+      <Dialog open={rejectionDialogOpen} onOpenChange={setRejectionDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reject Content</DialogTitle>
+            <DialogDescription>
+              Please provide a reason for rejecting this content (optional). The creator will be notified.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="rejection-reason">Rejection Reason (Optional)</Label>
+              <Textarea
+                id="rejection-reason"
+                placeholder="E.g., Content does not meet brand guidelines, missing required elements, etc."
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                rows={4}
+              />
+            </div>
+            {error && (
+              <p className="text-sm text-red-600 dark:text-red-400">
+                {error}
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setRejectionDialogOpen(false);
+                setRejectionReason("");
+                setRejectingContactId(null);
+                setError(null);
+              }}
+              disabled={!!verifyingContactId}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmRejection}
+              disabled={!!verifyingContactId}
+            >
+              {verifyingContactId ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Rejecting...
+                </>
+              ) : (
+                "Confirm Rejection"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

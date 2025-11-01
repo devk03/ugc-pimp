@@ -97,13 +97,19 @@ class WebhookPayload(BaseModel):
     type: Optional[str] = None
     body_included: Optional[bool] = None
 
-def get_contacts_list() -> list[dict]:
+def get_contacts_list(campaign_description: str, limit: int = 10) -> list[dict]:
     """
-    Fetch the two most recent contacts from Supabase.
-    Falls back to default values if fewer than 2 contacts are present.
-    TODO: fix
+    Fetch the most relevant contacts from Supabase using semantic search over embeddings.
+    Uses vector similarity search to find contacts whose descriptions match the campaign.
+    
+    Args:
+        campaign_description: The campaign description to match against
+        limit: Maximum number of contacts to return (default: 10)
+    
+    Returns:
+        List of contact dicts with 'id' and 'email' keys
     """
-    logger.info("Fetching contacts list from Supabase")
+    logger.info(f"Fetching contacts using semantic search for campaign: {campaign_description[:100]}...")
 
     default_contacts = [
         {"id": "688793b6-e6d6-4fc6-8aed-a55399bbe254", "email": "derekmillerdev@gmail.com"},
@@ -111,33 +117,67 @@ def get_contacts_list() -> list[dict]:
     ]
 
     try:
-        # response = supabase_client.table("contact") \
-        #     .select("id, email") \
-        #     .order("created_at", desc=True) \
-        #     .limit(2) \
-        #     .execute()
+        # Generate embedding for campaign description
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+        if not openai_api_key:
+            logger.error("OPENAI_API_KEY not found in environment variables")
+            logger.warning("Falling back to default contacts")
+            return default_contacts[:min(limit, len(default_contacts))]
+
+        openai_client = openai.OpenAI(api_key=openai_api_key)
+        
+        logger.info("Generating embedding for campaign description")
+        embedding_response = openai_client.embeddings.create(
+            model="text-embedding-3-small",
+            input=campaign_description[:8000]  # Limit length to avoid excessive tokenization
+        )
+        
+        query_embedding = embedding_response.data[0].embedding
+        logger.info(f"Generated embedding with {len(query_embedding)} dimensions")
+
+        # Use RPC function to find similar contacts
+        response = supabase_client.rpc(
+            "match_contacts",
+            {
+                "query_embedding": query_embedding,
+                "match_threshold": 0.7,  # Minimum similarity threshold
+                "match_count": limit
+            }
+        ).execute()
 
         contacts = []
-        # if response.data:
-        #     for contact in response.data:
-        #         if contact.get("email"):
-        #             contacts.append({
-        #                 "uuid": str(contact["id"]),
-        #                 "email": contact["email"]
-        #             })
-
-        # logger.info(f"Retrieved {len(contacts)} contacts from Supabase")
-
-        while len(contacts) < 2:
-            contacts.append(default_contacts[len(contacts)])
-            logger.info(f"Added default contact {len(contacts)}")
-
-        return contacts
+        if response.data:
+            for contact in response.data:
+                if contact.get("email"):
+                    contacts.append({
+                        "id": str(contact["id"]),
+                        "email": contact["email"]
+                    })
+            logger.info(f"Retrieved {len(contacts)} relevant contacts from semantic search")
+        
+        # Always ensure derekmillerdev contact is included (for testing/monitoring)
+        derekmillerdev_contact = default_contacts[0]  # {"id": "688793b6-e6d6-4fc6-8aed-a55399bbe254", "email": "derekmillerdev@gmail.com"}
+        if not any(c["id"] == derekmillerdev_contact["id"] for c in contacts):
+            contacts.insert(0, derekmillerdev_contact)  # Insert at the beginning
+            logger.info("Added derekmillerdev contact as default")
+        
+        # Fallback to default contacts if no matches found or fewer than needed
+        if len(contacts) < limit:
+            logger.info(f"Only found {len(contacts)} contacts, supplementing with defaults")
+            for default_contact in default_contacts:
+                if len(contacts) >= limit:
+                    break
+                # Avoid duplicates
+                if not any(c["id"] == default_contact["id"] for c in contacts):
+                    contacts.append(default_contact)
+        
+        # Return only the requested limit
+        return contacts[:limit]
 
     except Exception as e:
         logger.error(f"Error fetching contacts from Supabase: {str(e)}", exc_info=True)
         logger.info("Falling back to default contacts")
-        return default_contacts
+        return default_contacts[:min(limit, len(default_contacts))]
 
 def get_target_price(contact_id: str) -> float:
     """
@@ -493,22 +533,7 @@ async def initiate_campaign(request: InitiateCampaignRequest):
     logger.info(f"Initiating campaign: {request.campaign_id} for brand: {request.brand_id}")
 
     try:
-        # Fetch brand metadata from database
-#         logger.info(f"Starting crawler for campaign: {request.campaign_description}")
-
-        # profiles_scraped = await run_campaign_scraper_sync(
-        #     campaign_description=request.campaign_description,
-        #     num_queries=10,  # Generate 10 search queries
-        #     users_per_search=10,  # Get 10 users per query = ~100 total contacts
-        #     filter_emails_only=True,  # Only get profiles with emails
-        #     supabase_url=os.getenv('SUPABASE_URL'),
-        #     supabase_key=os.getenv('SUPABASE_KEY')
-        # )
-
-        # logger.info(f"Crawler completed: {profiles_scraped} profiles scraped and saved to database")
-
-        # Step 2: Fetch the newly scraped contacts from database
-        contacts_list = get_contacts_list(10)
+        logger.info(f"Starting crawler for campaign: {request.campaign_description}")
 
         try:
             brand_response = supabase_client.table("brand") \
@@ -522,7 +547,7 @@ async def initiate_campaign(request: InitiateCampaignRequest):
             logger.error(f"Error fetching brand metadata: {str(e)}", exc_info=True)
             brand_metadata = {}
 
-        contacts_list = get_contacts_list()
+        contacts_list = get_contacts_list(request.campaign_description)
 
         email_content = generate_initial_message_body(
             product_name=request.product_name,
