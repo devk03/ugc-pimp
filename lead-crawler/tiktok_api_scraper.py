@@ -50,11 +50,12 @@ class TikTokUserScraper:
     """Scraper for TikTok users using the unofficial API"""
 
     def __init__(self, ms_token: Optional[str] = None, output_file: str = "tiktok_api_profiles.json",
-                 supabase_url: Optional[str] = None, supabase_key: Optional[str] = None):
+                 supabase_url: Optional[str] = None, supabase_key: Optional[str] = None, proxy: Optional[str] = None):
         self.ms_token = ms_token or os.getenv('TIKTOK_MS_TOKEN')
         self.output_file = output_file
         self.profiles_data: List[Dict] = []
         self.visited_usernames: set = set()
+        self.proxy = proxy
 
         # Initialize Supabase client if credentials provided
         self.supabase: Optional[Client] = None
@@ -130,22 +131,28 @@ class TikTokUserScraper:
         Convert TikTok profile data to contact table format
 
         Maps TikTok fields to the contact table schema:
-        - firstname, lastname: Split from display_name
+        - firstname: display_name (no splitting)
+        - lastname: leave empty
         - email: from email field
         - platform: ['tiktok']
         - tags: categorization tags
-        - description: bio text
-        - metadata: all TikTok-specific data
+        - description: display_name + bio text
+        - metadata: only engagement/demographic metrics
         """
-        # Split display_name into firstname and lastname
         display_name = profile.get('display_name', '').strip()
-        name_parts = display_name.split(' ', 1) if display_name else ['', '']
-        firstname = name_parts[0] if len(name_parts) > 0 else None
-        lastname = name_parts[1] if len(name_parts) > 1 else None
+        bio = profile.get('bio', '').strip()
+
+        # Build description with display_name and bio
+        description_parts = []
+        if display_name:
+            description_parts.append(f"Name: {display_name}")
+        if bio:
+            description_parts.append(bio)
+        description = '\n'.join(description_parts) if description_parts else None
 
         # Generate tags based on profile data
         tags = ['tiktok']
-        if 'ugc' in profile.get('bio', '').lower() or 'ugc' in display_name.lower():
+        if 'ugc' in bio.lower() or 'ugc' in display_name.lower():
             tags.append('ugc-creator')
         if profile.get('follower_count', 0) < 10000:
             tags.append('nano-influencer')
@@ -156,32 +163,28 @@ class TikTokUserScraper:
         else:
             tags.append('macro-influencer')
 
-        # Store all TikTok-specific data in metadata
+        # Store only engagement and demographic metrics in metadata
         metadata = {
             'tiktok': {
                 'username': profile.get('username'),
-                'user_id': profile.get('user_id'),
-                'sec_uid': profile.get('sec_uid'),
+                'profile_url': profile.get('profile_url'),
                 'follower_count': profile.get('follower_count'),
                 'following_count': profile.get('following_count'),
                 'video_count': profile.get('video_count'),
                 'heart_count': profile.get('heart_count'),
                 'avg_likes_per_video': profile.get('avg_likes_per_video'),
                 'likes_to_followers_ratio': profile.get('likes_to_followers_ratio'),
-                'is_verified': profile.get('is_verified'),
-                'profile_url': profile.get('profile_url'),
-                'avatar_url': profile.get('avatar_url'),
-                'scraped_at': profile.get('scraped_at')
+                'is_verified': profile.get('is_verified')
             }
         }
 
         return {
-            'firstname': firstname,
-            'lastname': lastname,
+            'firstname': display_name if display_name else None,
+            'lastname': None,
             'email': profile.get('email'),
             'platform': ['tiktok'],
             'tags': tags,
-            'description': profile.get('bio'),
+            'description': description,
             'metadata': metadata
         }
 
@@ -262,19 +265,58 @@ class TikTokUserScraper:
 
             # Create browser sessions with anti-detection settings
             print("🌐 Creating browser sessions...")
+
+            # Parse proxy if provided (format: ip:port:username:password)
+            proxies_list = None
+            if self.proxy:
+                parts = self.proxy.split(':')
+                if len(parts) == 4:
+                    # Playwright ProxySettings format: separate username/password fields
+                    ip, port, username, password = parts[0], parts[1], parts[2], parts[3]
+                    proxy_config = {
+                        'server': f'http://{ip}:{port}',
+                        'username': username,
+                        'password': password
+                    }
+                    proxies_list = [proxy_config]  # Pass as list
+                    print(f"✓ Using proxy: {ip}:{port} (auth: {username})")
+                else:
+                    print(f"⚠️  Invalid proxy format, skipping proxy")
+
             try:
                 await api.create_sessions(
                     ms_tokens=[self.ms_token] if self.ms_token else [None],
                     num_sessions=1,
-                    sleep_after=5,  # Longer delay helps
-                    headless=False,  # Visible browser is less likely to be detected
-                    browser="webkit",  # Try webkit (Safari) - sometimes works better
-                    suppress_resource_load_types=["stylesheet", "font", "image"],  # Faster loading
+                    sleep_after=5,
+                    headless=False,
+                    browser='chromium',
+                    suppress_resource_load_types=["stylesheet", "font", "image"],
+                    proxies=proxies_list  # Use the proxies parameter (list format)
                 )
                 print("✓ Sessions created\n")
             except Exception as e:
-                print(f"⚠️  Warning: Could not create sessions: {e}")
-                print("Continuing anyway...\n")
+                print(f"✗ ERROR: Could not create sessions: {e}")
+                import traceback
+                traceback.print_exc()
+
+                if proxies_list:
+                    print("\nTrying without proxy...")
+                    # Try again without proxy
+                    try:
+                        await api.create_sessions(
+                            ms_tokens=[self.ms_token] if self.ms_token else [None],
+                            num_sessions=1,
+                            sleep_after=5,
+                            headless=False,
+                            browser='chromium',
+                            suppress_resource_load_types=["stylesheet", "font", "image"],
+                        )
+                        print("✓ Sessions created (without proxy)\n")
+                    except Exception as e2:
+                        print(f"✗ FATAL: Still could not create sessions: {e2}")
+                        raise
+                else:
+                    raise
 
             total_found = 0
 
@@ -366,14 +408,29 @@ class TikTokUserScraper:
         async with TikTokApi() as api:
             print(f"🔍 Fetching profile for: {username}")
 
+            # Parse proxy if provided
+            proxies_list = None
+            if self.proxy:
+                parts = self.proxy.split(':')
+                if len(parts) == 4:
+                    ip, port, username, password = parts[0], parts[1], parts[2], parts[3]
+                    proxy_config = {
+                        'server': f'http://{ip}:{port}',
+                        'username': username,
+                        'password': password
+                    }
+                    proxies_list = [proxy_config]
+                    print(f"✓ Using proxy: {ip}:{port} (auth: {username})")
+
             try:
                 await api.create_sessions(
                     ms_tokens=[self.ms_token] if self.ms_token else [None],
                     num_sessions=1,
                     sleep_after=5,
                     headless=False,
-                    browser="webkit",
+                    browser="chromium",
                     suppress_resource_load_types=["stylesheet", "font", "image"],
+                    proxies=proxies_list
                 )
 
                 # Remove @ if present
@@ -436,11 +493,30 @@ async def main():
     supabase_url = os.getenv('SUPABASE_URL')
     supabase_key = os.getenv('SUPABASE_KEY')
 
+    # Proxy list (format: ip:port:username:password)
+    PROXIES = [
+        "142.111.48.253:7030:nxdfbugl:mfptu9q4swio",
+        "31.59.20.176:6754:nxdfbugl:mfptu9q4swio",
+        "23.95.150.145:6114:nxdfbugl:mfptu9q4swio",
+        "198.23.239.134:6540:nxdfbugl:mfptu9q4swio",
+        "45.38.107.97:6014:nxdfbugl:mfptu9q4swio",
+        "107.172.163.27:6543:nxdfbugl:mfptu9q4swio",
+        "64.137.96.74:6641:nxdfbugl:mfptu9q4swio",
+        "216.10.27.159:6837:nxdfbugl:mfptu9q4swio",
+        "142.111.67.146:5611:nxdfbugl:mfptu9q4swio",
+        "142.147.128.93:6593:nxdfbugl:mfptu9q4swio",
+    ]
+
+    # Pick a random proxy from the list
+    import random
+    selected_proxy = random.choice(PROXIES)
+
     # Initialize scraper
     scraper = TikTokUserScraper(
         output_file='tiktok_api_users.json',
         supabase_url=supabase_url,
-        supabase_key=supabase_key
+        supabase_key=supabase_key,
+        proxy=selected_proxy
     )
 
     # Search for users
