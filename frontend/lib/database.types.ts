@@ -170,30 +170,39 @@ export type Database = {
       }
       contact_campaign: {
         Row: {
+          agreed_price: number | null
           campaign_id: string
           contact_id: string
+          content_url: string | null
           created_at: string
           description: string | null
           id: string
           metadata: Json | null
+          status: Database["public"]["Enums"]["contact_campaign_status"]
           updated_at: string
         }
         Insert: {
+          agreed_price?: number | null
           campaign_id: string
           contact_id: string
+          content_url?: string | null
           created_at?: string
           description?: string | null
           id?: string
           metadata?: Json | null
+          status?: Database["public"]["Enums"]["contact_campaign_status"]
           updated_at?: string
         }
         Update: {
+          agreed_price?: number | null
           campaign_id?: string
           contact_id?: string
+          content_url?: string | null
           created_at?: string
           description?: string | null
           id?: string
           metadata?: Json | null
+          status?: Database["public"]["Enums"]["contact_campaign_status"]
           updated_at?: string
         }
         Relationships: [
@@ -229,6 +238,11 @@ export type Database = {
         | "COMPLETED"
         | "ARCHIVED"
         | "DELETED"
+      contact_campaign_status:
+        | "proposed"
+        | "negotiating"
+        | "agreed"
+        | "delivered"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -364,6 +378,12 @@ export const Constants = {
         "COMPLETED",
         "ARCHIVED",
         "DELETED",
+      ],
+      contact_campaign_status: [
+        "proposed",
+        "negotiating",
+        "agreed",
+        "delivered",
       ],
     },
   },
