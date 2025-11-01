@@ -2,3 +2,5 @@ backend/.env
 backend/.venv
 .claude
 claude.md
+.vscode/
+.DS_Store

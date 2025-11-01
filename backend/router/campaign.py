@@ -25,7 +25,7 @@ from prompts import (
     get_delivered_content_acknowledgment,
     get_content_submission_error_message
 )
-from crawler import run_campaign_scraper
+from crawler import run_campaign_scraper_sync
 
 logger = logging.getLogger(__name__)
 
