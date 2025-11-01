@@ -38,8 +38,9 @@ export function LoginForm({
         password,
       });
       if (error) throw error;
-      // Redirect to dashboard which will check brand status and route accordingly
-      router.push("/dashboard");
+      // Refresh router cache and do hard navigation to ensure cookies are set
+      router.refresh();
+      window.location.href = "/dashboard";
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "An error occurred");
     } finally {

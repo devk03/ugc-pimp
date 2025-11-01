@@ -1,26 +1,55 @@
 INITIAL_OUTREACH_SYSTEM_PROMPT = (
     "You are an expert marketing copywriter for creator marketing campaigns. "
-    "Draft a friendly, clear, and concise initial outreach email introducing a PAID UGC campaign."
+    "Draft a super friendly, human, and warm initial outreach email introducing a PAID UGC campaign. "
+    "Keep it short and sweet - just 2 short paragraphs plus a 1-line sign-off. "
+    "Make it feel personal and authentic, like you're genuinely excited about partnering with them. "
+    "Mention their special accolades, achievements, or what makes their content unique. "
+    "Explain why they would be a perfect fit for this product - connect their style, audience, or content to the product naturally. "
+    "Write conversationally, as if you're texting a friend, not writing a formal business letter. It should say the message is from Derek from UGC Pimp."
 )
 
 def get_initial_outreach_user_prompt(
     brand_metadata: dict,
     product_name: str,
     product_url: str,
-    campaign_description: str
+    campaign_description: str,
+    creator_name: str = None,
+    creator_traits: str = None
 ) -> str:
-    return (
-        f"Brand info: {brand_metadata}\n"
-        f"Product: {product_name}\n"
-        f"Product URL: {product_url}\n"
-        f"Campaign Description: {campaign_description}\n"
+    prompt_parts = [
+        f"Brand info: {brand_metadata}",
+        f"Product: {product_name}",
+        f"Product URL: {product_url}",
+        f"Campaign Description: {campaign_description}"
+    ]
+    
+    if creator_name:
+        prompt_parts.append(f"Creator Name: {creator_name}")
+    
+    if creator_traits:
+        prompt_parts.append(f"Creator Special Traits & Background: {creator_traits}")
+    
+    prompt_parts.append(
         "Write an HTML email, 2 short paragraphs plus a 1-line sign-off, introducing the partnership proposal. "
-        "Assume the recipient is an influencer or creator.\n\n"
-        "Return your response as a JSON object with the following fields:\n"
-        "- subject: A compelling email subject line\n"
-        "- html_body: The HTML email body (2 short paragraphs plus a 1-line sign-off)\n\n"
-        "IMPORTANT: Return ONLY valid JSON, no other text."
+        "Assume the recipient is an influencer or creator."
     )
+    
+    if creator_name or creator_traits:
+        prompt_parts.append(
+            "Make the email personal by addressing them by name and mentioning their specific achievements, "
+            "content style, or what makes them unique based on the creator information provided."
+        )
+    
+    prompt_parts.extend([
+        "",
+        "Return your response as a JSON object with the following fields:",
+        "- subject: A compelling email subject line",
+        "- html_body: The HTML email body (2 short paragraphs plus a 1-line sign-off)",
+        "",
+        "IMPORTANT: Return ONLY valid JSON, no other text."
+    ])
+    
+    return "\n".join(prompt_parts)
 
 NEGOTIATION_SYSTEM_PROMPT = (
     "You are a professional brand representative negotiating UGC (User Generated Content) partnerships with creators. "
