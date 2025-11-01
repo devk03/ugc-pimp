@@ -52,6 +52,7 @@ export default async function CampaignDetailPage({
       description,
       status,
       agreed_price,
+      content_url,
       created_at,
       updated_at,
       contact:contact_id (
@@ -84,10 +85,10 @@ export default async function CampaignDetailPage({
       description: assignment.description,
       status: assignment.status,
       agreed_price: assignment.agreed_price,
+      content_url: assignment.content_url,
       created_at: assignment.created_at,
       updated_at: assignment.updated_at,
       metadata: null,
-      content_url: null, // Add missing field required by type definition
     },
   }));
 
