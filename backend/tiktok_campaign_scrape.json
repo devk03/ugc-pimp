@@ -1,0 +1,42 @@
+{
+  "total_profiles": 2,
+  "last_updated": "2025-11-01T10:22:36.380978",
+  "profiles": [
+    {
+      "username": "@must.haveproducts",
+      "display_name": "Must Have Products",
+      "user_id": "7105183011871786027",
+      "sec_uid": "MS4wLjABAAAAxNL2XuhRmefQ-FVqv6XSS9jZxkEPyqiAJe8yDkgVA-n6vP_vOZCFBcMn0iFhPRSN",
+      "bio": "👇 For collaborations 👇\nEmail: talktomhp@gmail.com",
+      "email": "talktomhp@gmail.com",
+      "follower_count": 47600,
+      "following_count": 80,
+      "video_count": 2709,
+      "heart_count": 741200,
+      "avg_likes_per_video": 273.61,
+      "likes_to_followers_ratio": 15.57,
+      "is_verified": false,
+      "profile_url": "https://www.tiktok.com/@must.haveproducts",
+      "avatar_url": "https://p16-common-sign.tiktokcdn-us.com/tos-useast5-avt-0068-tx/86567936489a93333743486f5a90a61b~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=9640&refresh_token=656ba9bb&x-expires=1762189200&x-signature=%2FS5CXFAA8fvA1CRLxkVj%2FZKFiq0%3D&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=useast5",
+      "scraped_at": "2025-11-01T10:22:34.505924"
+    },
+    {
+      "username": "@tech.tips.trick",
+      "display_name": "tech tricks and fix",
+      "user_id": "7344783373880050720",
+      "sec_uid": "MS4wLjABAAAAaHoI2wc8ZqDIC9ohDzAfTMPie9HQqTY3uZJqczp_6oRt2StnF_381TMJncYxXt_O",
+      "bio": "tech.tips.tricks.tik.tok@gmail.com",
+      "email": "tech.tips.tricks.tik.tok@gmail.com",
+      "follower_count": 233500,
+      "following_count": 17,
+      "video_count": 390,
+      "heart_count": 3000000,
+      "avg_likes_per_video": 7692.31,
+      "likes_to_followers_ratio": 12.85,
+      "is_verified": false,
+      "profile_url": "https://www.tiktok.com/@tech.tips.trick",
+      "avatar_url": "https://p16-common-sign.tiktokcdn-us.com/tos-useast2a-avt-0068-euttp/674362963c8d447e097312f144da17ef~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=9640&refresh_token=1b7315b1&x-expires=1762189200&x-signature=maApxpPuWYf9FJ750TFLQShB22o%3D&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=useast5",
+      "scraped_at": "2025-11-01T10:22:36.380624"
+    }
+  ]
+}

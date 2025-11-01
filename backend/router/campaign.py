@@ -15,6 +15,7 @@ from prompts import (
     NEGOTIATION_SYSTEM_PROMPT,
     get_negotiation_context_prompt
 )
+from crawler import run_campaign_scraper
 
 logger = logging.getLogger(__name__)
 
@@ -82,47 +83,47 @@ class WebhookPayload(BaseModel):
     type: Optional[str] = None
     body_included: Optional[bool] = None
 
-def get_contacts_list() -> list[dict]:
+def get_contacts_list(limit: int = 10) -> list[dict]:
     """
-    Fetch the two most recent contacts from Supabase.
-    Falls back to default values if fewer than 2 contacts are present.
-    TODO: fix
-    """
-    logger.info("Fetching contacts list from Supabase")
+    Fetch the most recent contacts with emails from Supabase.
 
-    default_contacts = [
-        {"uuid": str(uuid.uuid4()), "email": "derekmillerdev@gmail.com"},
-        {"uuid": str(uuid.uuid4()), "email": "dtkunjadia@gmail.com"},
-    ]
+    Args:
+        limit: Maximum number of contacts to fetch (default: 10)
+
+    Returns:
+        List of contact dictionaries with 'uuid', 'email', and 'firstname' fields
+    """
+    logger.info(f"Fetching up to {limit} contacts from Supabase")
 
     try:
-        # response = supabase_client.table("contact") \
-        #     .select("id, email") \
-        #     .order("created_at", desc=True) \
-        #     .limit(2) \
-        #     .execute()
+        response = supabase_client.table("contact") \
+            .select("id, email, firstname, metadata") \
+            .not_("email", "is", "null") \
+            .order("created_at", desc=True) \
+            .limit(limit) \
+            .execute()
 
         contacts = []
-        # if response.data:
-        #     for contact in response.data:
-        #         if contact.get("email"):
-        #             contacts.append({
-        #                 "uuid": str(contact["id"]),
-        #                 "email": contact["email"]
-        #             })
+        if response.data:
+            for contact in response.data:
+                if contact.get("email"):
+                    contacts.append({
+                        "uuid": str(contact["id"]),
+                        "email": contact["email"],
+                        "firstname": contact.get("firstname", ""),
+                        "metadata": contact.get("metadata", {})
+                    })
 
-        # logger.info(f"Retrieved {len(contacts)} contacts from Supabase")
+        logger.info(f"Retrieved {len(contacts)} contacts from Supabase")
 
-        while len(contacts) < 2:
-            contacts.append(default_contacts[len(contacts)])
-            logger.info(f"Added default contact {len(contacts)}")
+        if len(contacts) == 0:
+            logger.warning("No contacts found in database. Campaign cannot proceed without contacts.")
 
         return contacts
 
     except Exception as e:
         logger.error(f"Error fetching contacts from Supabase: {str(e)}", exc_info=True)
-        logger.info("Falling back to default contacts")
-        return default_contacts
+        return []
 
 def get_target_price(contact_id: str) -> float:
     """
@@ -230,18 +231,47 @@ def generate_initial_message_body(request: 'InitiateCampaignRequest') -> dict:
 
 @router.post("/initiate", response_model=InitiateCampaignResponse)
 async def initiate_campaign(request: InitiateCampaignRequest):
-    # TODO: get the actual relevant contacts for the campaign
+    """
+    Initiate a campaign by:
+    1. Scraping TikTok for relevant creators based on campaign description
+    2. Fetching the newly scraped contacts from database
+    3. Sending outreach emails to those contacts
+    """
     logger.info(f"Initiating campaign: {request.campaign_id} for brand: {request.brand_id}")
 
     try:
-        contacts_list = get_contacts_list()
+        # Step 1: Run the TikTok crawler to find relevant creators
+        logger.info(f"Starting crawler for campaign: {request.campaign_description}")
 
+        profiles_scraped = await run_campaign_scraper(
+            campaign_description=request.campaign_description,
+            num_queries=10,  # Generate 10 search queries
+            users_per_search=10,  # Get 10 users per query = ~100 total contacts
+            filter_emails_only=True,  # Only get profiles with emails
+            supabase_url=os.getenv('SUPABASE_URL'),
+            supabase_key=os.getenv('SUPABASE_KEY')
+        )
+
+        logger.info(f"Crawler completed: {profiles_scraped} profiles scraped and saved to database")
+
+        # Step 2: Fetch the newly scraped contacts from database
+        contacts_list = get_contacts_list(limit=profiles_scraped if profiles_scraped > 0 else 10)
+
+        if len(contacts_list) == 0:
+            logger.error("No contacts found after scraping. Cannot send emails.")
+            raise HTTPException(
+                status_code=400,
+                detail="No contacts found. Scraping may have failed or no profiles matched criteria."
+            )
+
+        # Step 3: Generate email content and send to contacts
         email_content = generate_initial_message_body(request)
 
         for contact in contacts_list:
             contact_id = contact["uuid"]
             contact_email = contact["email"]
             logger.info(f"Sending email to {contact_email} for campaign {request.campaign_id}")
+
             sent_message = agentmail_client.inboxes.messages.send(
                 inbox_id=NEGOTIATE_INBOX_ID,
                 to=contact_email,
@@ -254,6 +284,9 @@ async def initiate_campaign(request: InitiateCampaignRequest):
 
         logger.info(f"Campaign {request.campaign_id} initiated successfully. Sent to {len(contacts_list)} contacts")
         return {"status": "campaign initiated"}
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error initiating campaign {request.campaign_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
