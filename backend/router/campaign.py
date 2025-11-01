@@ -29,7 +29,7 @@ from crawler import run_campaign_scraper_sync
 
 logger = logging.getLogger(__name__)
 
-NEGOTIATE_INBOX_ID = "negotiations@agentmail.to"
+NEGOTIATE_INBOX_ID = "opportunities@ugcpimp.com"
 
 agentmail_api_key = os.getenv("AGENTMAIL_API_KEY")
 agentmail_client = AgentMail(api_key=agentmail_api_key)
@@ -136,12 +136,13 @@ def get_contacts_list(campaign_description: str, limit: int = 10) -> list[dict]:
         logger.info(f"Generated embedding with {len(query_embedding)} dimensions")
 
         # Use RPC function to find similar contacts
+        # Request limit - 2 to make room for default contacts
         response = supabase_client.rpc(
             "match_contacts",
             {
                 "query_embedding": query_embedding,
-                "match_threshold": 0.7,  # Minimum similarity threshold
-                "match_count": limit
+                "match_threshold": 0.01,  # Minimum similarity threshold
+                "match_count": max(limit - 2, 1)  # Reserve 2 slots for defaults
             }
         ).execute()
 
@@ -154,23 +155,13 @@ def get_contacts_list(campaign_description: str, limit: int = 10) -> list[dict]:
                         "email": contact["email"]
                     })
             logger.info(f"Retrieved {len(contacts)} relevant contacts from semantic search")
-        
-        # Always ensure derekmillerdev contact is included (for testing/monitoring)
-        derekmillerdev_contact = default_contacts[0]  # {"id": "688793b6-e6d6-4fc6-8aed-a55399bbe254", "email": "derekmillerdev@gmail.com"}
-        if not any(c["id"] == derekmillerdev_contact["id"] for c in contacts):
-            contacts.insert(0, derekmillerdev_contact)  # Insert at the beginning
-            logger.info("Added derekmillerdev contact as default")
-        
-        # Fallback to default contacts if no matches found or fewer than needed
-        if len(contacts) < limit:
-            logger.info(f"Only found {len(contacts)} contacts, supplementing with defaults")
-            for default_contact in default_contacts:
-                if len(contacts) >= limit:
-                    break
-                # Avoid duplicates
-                if not any(c["id"] == default_contact["id"] for c in contacts):
-                    contacts.append(default_contact)
-        
+
+        # Always ensure both default contacts are included
+        for default_contact in default_contacts:
+            if not any(c["id"] == default_contact["id"] for c in contacts):
+                contacts.append(default_contact)
+                logger.info(f"Added {default_contact['email']} as default contact")
+
         # Return only the requested limit
         return contacts[:limit]
 
